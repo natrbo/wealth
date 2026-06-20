@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Wealth Ledger</title>
+<style>
+  :root{
+    --ink:#0E1726; --ink2:#16223A; --line:#26344F; --text:#E8EDF5;
+    --mute:#8A99B5; --gold:#C8A35B; --gold2:#E4CF9B; --green:#5FB98E; --red:#D8745F;
+    --tech:#4DD0C7;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #1A2740, var(--ink));
+    color:var(--text); font-family:'Inter',-apple-system,system-ui,sans-serif;
+    min-height:100vh;
+  }
+  input{font-family:inherit}
+  input[type=text]{-moz-appearance:textfield}
+  .wrap{max-width:560px;margin:0 auto;padding-bottom:60px}
+  header{display:flex;justify-content:space-between;align-items:flex-end;padding:26px 20px 14px}
+  .eyebrow{color:var(--gold);font-size:10px;letter-spacing:4px;font-weight:600}
+  h1{font-family:Georgia,serif;font-size:24px;font-weight:700;margin-top:4px}
+  .total{color:var(--gold);font-size:24px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+  .sub{color:var(--mute);font-size:11px}
+  .profiles{display:flex;gap:8px;padding:0 16px 12px}
+  .pf{flex:1;background:none;border:1px solid var(--line);color:var(--mute);border-radius:10px;
+    padding:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .pf.on{background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--ink);border-color:transparent}
+  nav{display:flex;gap:4px;padding:0 12px;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{background:none;border:none;color:var(--mute);padding:12px 11px 13px;font-size:13px;
+    cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;font-family:inherit}
+  .tab.on{color:var(--gold);border-bottom-color:var(--gold);font-weight:600}
+  main{padding:16px}
+  .card{background:var(--ink2);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+  .ctitle{color:var(--gold2);font-size:11px;letter-spacing:2px;font-weight:600;
+    margin-bottom:16px;text-transform:uppercase}
+  .rowh{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+  .track{position:relative;height:8px;background:#0B1322;border-radius:6px;overflow:hidden}
+  .fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;transition:width .5s}
+  .tick{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:.55}
+  .ceil{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--red)}
+  .arow{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
+  .brow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+  input.num{background:#0B1322;border:1px solid var(--line);color:var(--gold);border-radius:8px;
+    padding:8px 10px;width:128px;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;outline:none}
+  .btn{background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--ink);border:none;
+    border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .dot{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:8px;vertical-align:middle}
+  .alert{background:var(--ink2);border-left:3px solid var(--gold);border-radius:8px;
+    padding:11px 14px;font-size:13px;line-height:1.4;margin-bottom:8px}
+  .alert.warn{border-left-color:var(--red)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink2);
+    border:1px solid var(--green);color:var(--green);padding:10px 20px;border-radius:10px;font-size:13px;z-index:99}
+  .muted{color:var(--mute)} .green{color:var(--green)} .red{color:var(--red)} .gold{color:var(--gold)}
+  .tnum{font-variant-numeric:tabular-nums}
+  .acc{width:100%;background:none;border:none;cursor:pointer;display:flex;justify-content:space-between;
+    align-items:center;padding:13px 0;border-top:1px solid var(--line);font-family:inherit;color:var(--text)}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--gold);
+    border-radius:50%;animation:sp 0.7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .center{display:grid;place-items:center;min-height:60vh;gap:14px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="center"><span class="spin"></span><span class="muted" style="letter-spacing:3px;font-size:12px">กำลังโหลด…</span></div>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════════╗
+// ║  CONFIG — แปะ URL ของ Apps Script ตรงนี้          ║
+// ╚══════════════════════════════════════════════════╝
+const API_URL = "https://script.google.com/macros/s/AKfycby784l1qVZ2Kc21xqTdVIE-O30PddA0OrtM2bpWzhb05c1aXqngb_azUzIzzCmlpQuD/exec";
+
+// asset class master (รวม 100%)
+const CLASSES = {
+  dm_core:   {label:"หุ้นต่างประเทศ (กระจาย)", target:27, color:"#5B8DEF"},
+  dm_tech:   {label:"หุ้น Tech / Growth",      target:14, color:"#4DD0C7", ceiling:18},
+  thai_equity:{label:"หุ้นไทย",               target:17, color:"#D8745F"},
+  fixed:     {label:"ตราสารหนี้",             target:22, color:"#5FB98E"},
+  em_growth: {label:"EM โต (อินเดีย+เวียดนาม)",target:7,  color:"#B98ED8"},
+  em_china:  {label:"จีน (tactical)",          target:6,  color:"#9B7BC4", ceiling:8},
+  gold:      {label:"ทองคำ",                  target:5,  color:"#C8A35B"},
+  reit:      {label:"อสังหา / REIT",           target:2,  color:"#E0975C"},
+};
+const CK = Object.keys(CLASSES);
+const BUCKET_COLORS=["#C8A35B","#5B8DEF","#5FB98E","#B98ED8","#E0975C","#D8745F"];
+
+// ── SEED ──
+const SEED = {
+  fern: {
+    assets:[
+      {id:"pvd_f",bucket:"PVD",name:"MRT-F ตราสารหนี้",asset_class:"fixed",value:377560.8,plan:0},
+      {id:"pvd_e",bucket:"PVD",name:"MRT-E หุ้นไทย",asset_class:"thai_equity",value:226536.48,plan:0},
+      {id:"pvd_fif_t",bucket:"PVD",name:"MRT-FIF (Tech)",asset_class:"dm_tech",value:30205,plan:0},
+      {id:"pvd_fif_c",bucket:"PVD",name:"MRT-FIF (กระจาย)",asset_class:"dm_core",value:120819,plan:0},
+      {id:"th_advanc",bucket:"หุ้นไทย",name:"ADVANC",asset_class:"thai_equity",value:192150,plan:0},
+      {id:"th_aot",bucket:"หุ้นไทย",name:"AOT",asset_class:"thai_equity",value:90016,plan:0},
+      {id:"th_bdms",bucket:"หุ้นไทย",name:"BDMS",asset_class:"thai_equity",value:75474,plan:0},
+      {id:"th_cpall",bucket:"หุ้นไทย",name:"CPALL",asset_class:"thai_equity",value:80080,plan:0},
+      {id:"f_inno_t",bucket:"RMF",name:"B-INNOTECHRMF (Tech)",asset_class:"dm_tech",value:143923,plan:2850},
+      {id:"f_inno_c",bucket:"RMF",name:"B-INNOTECHRMF (อื่น)",asset_class:"dm_core",value:7575,plan:150},
+      {id:"f_sp_t",bucket:"RMF",name:"SCBRMS&P500 (Tech)",asset_class:"dm_tech",value:14519,plan:0},
+      {id:"f_sp_c",bucket:"RMF",name:"SCBRMS&P500 (อื่น)",asset_class:"dm_core",value:21779,plan:0},
+      {id:"f_eu",bucket:"RMF",name:"SCBRMEU",asset_class:"dm_core",value:25388.93,plan:3000},
+      {id:"f_china",bucket:"RMF",name:"SCBRMMLCA",asset_class:"em_china",value:23385.39,plan:0},
+      {id:"f_india",bucket:"RMF",name:"B-INDIAMRMF",asset_class:"em_growth",value:21827.96,plan:4000},
+      {id:"f_viet",bucket:"RMF",name:"KFVIETRMF",asset_class:"em_growth",value:6210.51,plan:3000},
+      {id:"f_gnp_t",bucket:"RMF",name:"KKP GNP RMF-UH (Tech)",asset_class:"dm_tech",value:0,plan:3300},
+      {id:"f_gnp_c",bucket:"RMF",name:"KKP GNP RMF-UH (กระจาย)",asset_class:"dm_core",value:0,plan:7700},
+      {id:"f_gold",bucket:"RMF",name:"SCBGOLDHRMF",asset_class:"gold",value:0,plan:6000},
+      {id:"f_kfgg_t",bucket:"SSF",name:"KFGGSSF (Tech)",asset_class:"dm_tech",value:37676,plan:0},
+      {id:"f_kfgg_c",bucket:"SSF",name:"KFGGSSF (กระจาย)",asset_class:"dm_core",value:30826,plan:0},
+      {id:"f_spssf_t",bucket:"SSF",name:"SCBS&P500-SSF (Tech)",asset_class:"dm_tech",value:32224,plan:0},
+      {id:"f_spssf_c",bucket:"SSF",name:"SCBS&P500-SSF (อื่น)",asset_class:"dm_core",value:48336,plan:0},
+      {id:"f_kchg_t",bucket:"SSF",name:"K-CHANGE-SSF (Tech)",asset_class:"dm_tech",value:34367,plan:0},
+      {id:"f_kchg_c",bucket:"SSF",name:"K-CHANGE-SSF (กระจาย)",asset_class:"dm_core",value:28118,plan:0},
+      {id:"f_kchina",bucket:"SSF",name:"K-CHINA-SSF",asset_class:"em_china",value:43453.37,plan:0},
+      {id:"f_scbce",bucket:"SSF",name:"SCBCE(SSF) จีน A",asset_class:"em_china",value:3269.28,plan:0},
+      {id:"f_vietssf",bucket:"SSF",name:"B-VIETNAMSSF",asset_class:"em_growth",value:3072.09,plan:0},
+      {id:"f_scbfp",bucket:"SSF",name:"SCBFP-SSF (REIT)",asset_class:"reit",value:6192.66,plan:0},
+      {id:"f_scbsff",bucket:"SSF",name:"SCBSFF (บอนด์สั้น)",asset_class:"fixed",value:72.2,plan:0},
+      {id:"f_thaiesg",bucket:"ThaiESG",name:"SCBTB (ThaiESG)",asset_class:"fixed",value:24667.5,plan:5000},
+    ],
+    tax:{income:1683028,wht:225026,ss:10500,pvd:72423,spouse:0,parents:0,children:0,children2nd:0,
+      parentsHealth:0,lifeInsurance:0,healthInsurance:0,pension:0,ssf:0,homeLoan:0,donation:0,
+      rmfHistorical:90285,esgHistorical:25000},
+  },
+  nut: {
+    assets:[
+      {id:"n_inno",bucket:"BBLAM",name:"RMFBINNOTECH",asset_class:"dm_tech",value:129140,plan:1500},
+      {id:"n_gold",bucket:"BBLAM",name:"BGOLDRMF",asset_class:"gold",value:3929,plan:500},
+      {id:"n_gh",bucket:"KAsset",name:"K-GHRMF (หุ้นโลก)",asset_class:"dm_core",value:65709,plan:0},
+      {id:"n_usa",bucket:"KAsset",name:"K-USA-SSF (S&P500)",asset_class:"dm_core",value:20036,plan:0},
+      {id:"n_china",bucket:"KAsset",name:"K-CHINA-SSF",asset_class:"em_china",value:2451,plan:1500},
+      {id:"n_fixed",bucket:"KAsset",name:"K-FIXEDPLUS-SSF",asset_class:"fixed",value:6422,plan:0},
+      {id:"n_firmf",bucket:"KAsset",name:"K-FIRMF",asset_class:"fixed",value:2533,plan:0},
+      {id:"n_esg",bucket:"SCB",name:"SCBTM(ThaiESG) ผสม",asset_class:"thai_equity",value:0,plan:13000},
+      {id:"n_us_dca",bucket:"BBLAM",name:"RMFBUSPASSIVE",asset_class:"dm_core",value:0,plan:2000},
+    ],
+    tax:{income:1439111,wht:139245,ss:10500,pvd:48400,spouse:0,parents:1,children:0,children2nd:0,
+      parentsHealth:0,lifeInsurance:4510,healthInsurance:33000,pension:0,ssf:0,homeLoan:62000,donation:0,
+      rmfHistorical:6000,esgHistorical:0},
+  },
+};
+
+// ── State ──
+let STATE = { profile:"fern", assets:[], tax:{}, snapshots:[], tab:"overview", editing:false, accOpen:{} };
+
+const baht = n => "฿"+Math.round(+n||0).toLocaleString("th-TH");
+const num = v => { const c=String(v).replace(/[^0-9.]/g,""); return c===""?0:parseFloat(c)||0; };
+const $ = (sel,el=document)=>el.querySelector(sel);
+
+// ── completed DCA months (เริ่ม ก.ค. 2026, ตัดวันที่ 5) ──
+function completedMonths(start="2026-07"){
+  const [sy,sm]=start.split("-").map(Number);
+  const d=new Date(), ny=d.getFullYear(), nm=d.getMonth()+1, nd=d.getDate();
+  let n=(ny-sy)*12+(nm-sm); if(nd>=5)n+=1; return Math.max(0,n);
+}
+
+// ╔═══ Tax Engine 2569 ═══╗
+// คำนวณว่าต้องลดหย่อนเพิ่มเท่าไรเพื่อลดขั้นภาษี + ประหยัดเท่าไร
+function bracketInfo(net, marginal){
+  const EDGES=[150000,300000,500000,750000,1000000,2000000,5000000];
+  const RATES=[0,.05,.10,.15,.20,.25,.30,.35];
+  // หาขอบล่างของขั้นปัจจุบัน
+  let lower=0;
+  for(const e of EDGES){ if(net>e) lower=e; else break; }
+  const need=net-lower; // ลดหย่อนเท่านี้ → ตกไปขั้นล่าง
+  // อัตราขั้นล่างถัดไป
+  const idx=EDGES.indexOf(lower);
+  const lowerRate=idx>=0?RATES[idx]:0;
+  const saving=Math.round(need*marginal); // ประหยัดจากส่วนที่ตกขั้น
+  return {need:Math.max(need,0), curRate:marginal, lowerRate, saving, atBottom:net<=150000};
+}
+
+function calcTax(s){
+  const inc=+s.income||0;
+  const exp=Math.min(inc*0.5,100000);
+  const fam=60000+(s.spouse?60000:0)+Math.min(+s.parents||0,4)*30000
+    +(+s.children||0)*30000+(+s.children2nd||0)*60000+Math.min(+s.parentsHealth||0,15000)+(+s.ss||0);
+  const hlth=Math.min(+s.healthInsurance||0,25000);
+  const ins=Math.min((+s.lifeInsurance||0)+hlth,100000);
+  const pen=Math.min(+s.pension||0,inc*0.15,200000);
+  const rmf=Math.min(+s.rmf||0,inc*0.30,500000);
+  const pvd=+s.pvd||0, ssf=Math.min(+s.ssf||0,inc*0.30,200000);
+  const retSum=rmf+pvd+ssf+pen, ret=Math.min(retSum,500000);
+  const esg=Math.min(+s.thaiesg||0,inc*0.30,300000);
+  const home=Math.min(+s.homeLoan||0,100000);
+  const sumD=exp+fam+ins+ret+esg+home;
+  const netBD=Math.max(inc-sumD,0);
+  const don=Math.min(+s.donation||0,netBD*0.10);
+  const net=Math.max(netBD-don,0);
+  const B=[[150000,0],[150000,.05],[200000,.10],[250000,.15],[250000,.20],[1000000,.25],[3000000,.30],[Infinity,.35]];
+  let tax=0,rem=net,mg=0;
+  for(const[b,r]of B){if(rem<=0)break;const c=Math.min(rem,b);tax+=c*r;rem-=c;if(c>0)mg=r;}
+  const wht=+s.wht||0, tp=Math.round(tax);
+  return {exp,fam,ins,ret,esg,home,don,retSum,net,taxPayable:tp,wht,refund:Math.round(wht-tp),marginal:mg,
+    allowedRMF:rmf,
+    rmfRoom:Math.max(Math.min(inc*0.30,500000-pvd-ssf-pen)-(+s.rmf||0),0),
+    esgRoom:Math.max(Math.min(inc*0.30,300000)-esg,0),
+    retireRoom:Math.max(500000-retSum,0)};
+}
+
+// derived tax: rmf/thaiesg auto จาก plan × เดือน
+function derivedTax(){
+  const t=STATE.tax, done=completedMonths();
+  const rmfMonthly=STATE.assets.filter(a=>a.bucket==="RMF"&&(+a.plan>0)).reduce((s,a)=>s+(+a.plan||0),0);
+  const esgAsset=STATE.assets.find(a=>/esg/i.test(a.id)||/ThaiESG/i.test(a.name));
+  const esgMonthly=esgAsset?(+esgAsset.plan||0):0;
+  return {...t, rmf:(+t.rmfHistorical||0)+rmfMonthly*done, thaiesg:(+t.esgHistorical||0)+esgMonthly*done,
+    _done:done, _rmfMonthly:rmfMonthly, _esgMonthly:esgMonthly};
+}
+
+// ── API ──
+async function apiLoad(profile){
+  const r=await fetch(`${API_URL}?profile=${profile}`);
+  const j=await r.json();
+  if(!j.ok) throw new Error(j.error||"load failed");
+  return j.data;
+}
+async function apiSave(sheet,profile,rows){
+  // ใช้ text/plain เลี่ยง CORS preflight
+  await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify({sheet,profile,rows})});
+}
+
+function toast(msg,color="var(--green)"){
+  const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
+  t.style.borderColor=color; t.style.color=color; document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2000);
+}
+
+// ── load profile data ──
+async function loadProfile(profile){
+  STATE.profile=profile;
+  render(true); // show loading
+  try{
+    const data = await apiLoad(profile);
+    if(data.assets && data.assets.length){
+      STATE.assets = data.assets.map(a=>({...a,value:+a.value||0,plan:+a.plan||0}));
+    } else {
+      STATE.assets = []; // ว่าง — ให้กดโหลด seed
+    }
+    STATE.tax = (data.tax && data.tax[0]) ? coerceTax(data.tax[0]) : {};
+    STATE.snapshots = (data.snapshots||[]).map(s=>({...s,total:+s.total||0,
+      breakdown: typeof s.breakdown==="string"?safeParse(s.breakdown):(s.breakdown||{})}));
+  }catch(e){
+    STATE._error = String(e);
+  }
+  render();
+}
+function safeParse(s){try{return JSON.parse(s)}catch{return {}}}
+function coerceTax(o){const out={...o};["income","wht","ss","pvd","parents","children","children2nd",
+  "parentsHealth","lifeInsurance","healthInsurance","pension","ssf","homeLoan","donation",
+  "rmfHistorical","esgHistorical"].forEach(k=>out[k]=+out[k]||0); out.spouse=+out.spouse?1:0; return out;}
+
+function loadSeed(){
+  const s=SEED[STATE.profile];
+  STATE.assets=s.assets.map(a=>({...a}));
+  STATE.tax={...s.tax};
+  render();
+  toast("โหลด seed แล้ว — กดบันทึกเพื่อเก็บลง Sheet");
+}
+
+// ── computed ──
+function total(){return STATE.assets.reduce((s,a)=>s+(+a.value||0),0);}
+function byClass(){const m={};CK.forEach(k=>m[k]=0);STATE.assets.forEach(a=>m[a.asset_class]=(m[a.asset_class]||0)+(+a.value||0));return m;}
+function byBucket(){const m={};STATE.assets.forEach(a=>m[a.bucket]=(m[a.bucket]||0)+(+a.value||0));return m;}
+function buckets(){return [...new Set(STATE.assets.map(a=>a.bucket))];}
+
+function alerts(){
+  const out=[],t=total(),bc=byClass();
+  CK.forEach(k=>{
+    const pct=t?bc[k]/t*100:0, tgt=CLASSES[k].target, d=pct-tgt;
+    if(k==="thai_equity"&&d>5)out.push({w:1,t:`หุ้นไทย ${pct.toFixed(1)}% เกินเป้า ${tgt}% — หยุดเติม ปล่อย DCA เจือจาง`});
+    if(k==="gold"&&d<-3)out.push({w:0,t:`ทองคำ ${pct.toFixed(1)}% ต่ำกว่าเป้า ${tgt}% — DCA ต่อ`});
+    if(k==="dm_tech"){const c=CLASSES[k].ceiling;if(pct>c)out.push({w:1,t:`Tech ${pct.toFixed(1)}% เกิน ceiling ${c}%`});
+      else if(pct>c-2)out.push({w:0,t:`Tech ${pct.toFixed(1)}% ใกล้ ceiling ${c}%`});}
+    if(k==="dm_core"&&d<-5)out.push({w:0,t:`หุ้นกระจาย ${pct.toFixed(1)}% ต่ำกว่าเป้า ${tgt}%`});
+    if(k==="em_china"){const c=CLASSES[k].ceiling;if(pct>c)out.push({w:1,t:`จีน ${pct.toFixed(1)}% เกิน ceiling ${c}% — tactical เท่านั้น`});}
+    if(k==="em_growth"&&d<-3)out.push({w:0,t:`EM โต ${pct.toFixed(1)}% ต่ำกว่าเป้า ${tgt}% — เติมได้`});
+  });
+  const dt=derivedTax(), ru=(+dt.rmf||0)+(+dt.pvd||0)+(+dt.ssf||0)+(+dt.pension||0);
+  if(ru/500000>0.9)out.push({w:1,t:`กลุ่มเกษียณใช้ไป ${(ru/500000*100).toFixed(0)}% ของ 500k — ใกล้เต็ม`});
+  return out;
+}
+
+// ╔══════════ RENDER ══════════╗
+function render(loading){
+  const app=$("#app");
+  if(loading){app.innerHTML=`<div class="center"><span class="spin"></span><span class="muted" style="letter-spacing:3px;font-size:12px">กำลังโหลด ${STATE.profile}…</span></div>`;return;}
+  const t=total();
+  app.innerHTML=`
+    <header>
+      <div><div class="eyebrow">UNIFIED PORTFOLIO</div><h1>Wealth Ledger</h1></div>
+      <div style="text-align:right">
+        <div class="sub">มูลค่ารวม</div>
+        <div class="total">${baht(t)}</div>
+        <div class="sub">${STATE.profile==="fern"?"เฟิร์น":"นัท"}</div>
+      </div>
+    </header>
+    <div class="profiles">
+      <button class="pf ${STATE.profile==="fern"?"on":""}" onclick="switchProfile('fern')">เฟิร์น</button>
+      <button class="pf ${STATE.profile==="nut"?"on":""}" onclick="switchProfile('nut')">นัท</button>
+    </div>
+    <nav>
+      ${[["overview","ภาพรวม"],["update","อัปเดต"],["dca","แผน DCA"],["growth","เติบโต"],["tax","ภาษี"]]
+        .map(([k,l])=>`<button class="tab ${STATE.tab===k?"on":""}" onclick="go('${k}')">${l}</button>`).join("")}
+    </nav>
+    <main id="main"></main>`;
+  renderTab();
+}
+function renderTab(){
+  const m=$("#main"); if(!m)return;
+  if(STATE._error){m.innerHTML=`<div class="card"><div class="red">เชื่อมต่อไม่ได้</div><div class="muted" style="font-size:12px;margin-top:6px">${STATE._error}</div><div class="muted" style="font-size:11px;margin-top:8px">เช็คว่า API_URL ถูกต้อง และ deploy เป็น Anyone</div></div>`;return;}
+  if(STATE.assets.length===0 && STATE.tab!=="tax"){
+    m.innerHTML=`<div class="card" style="text-align:center;padding:36px">
+      <div class="gold" style="font-size:15px;margin-bottom:8px">ยังไม่มีข้อมูล</div>
+      <div class="muted" style="font-size:13px;line-height:1.6;margin-bottom:16px">โหลดข้อมูลตั้งต้นของ${STATE.profile==="fern"?"เฟิร์น":"นัท"} แล้วกดบันทึก</div>
+      <button class="btn" onclick="loadSeed()">โหลด seed เริ่มต้น</button></div>`;return;
+  }
+  ({overview:tabOverview,update:tabUpdate,dca:tabDCA,growth:tabGrowth,tax:tabTax}[STATE.tab])(m);
+}
+
+function tabOverview(m){
+  const t=total(),bc=byClass(),bb=byBucket();
+  let h=alerts().map(a=>`<div class="alert ${a.w?"warn":""}"><span style="color:${a.w?"var(--red)":"var(--gold)"};font-weight:700;margin-right:8px">${a.w?"▲":"›"}</span>${a.t}</div>`).join("");
+  h+=`<div class="card"><div class="ctitle">สัดส่วน Asset Class เทียบเป้า</div>`;
+  CK.forEach(k=>{
+    const pct=t?bc[k]/t*100:0,tgt=CLASSES[k].target,d=pct-tgt,c=CLASSES[k];
+    h+=`<div style="margin-bottom:18px">
+      <div class="rowh"><span><span class="dot" style="background:${c.color}"></span><span style="font-size:14px">${c.label}</span></span>
+      <span class="tnum"><b>${pct.toFixed(1)}%</b><span class="muted" style="font-size:12px"> / ${tgt}%</span></span></div>
+      <div class="track"><div class="fill" style="width:${Math.min(pct,100)}%;background:${c.color}"></div>
+      <div class="tick" style="left:${Math.min(tgt,100)}%"></div>
+      ${c.ceiling?`<div class="ceil" style="left:${Math.min(c.ceiling,100)}%"></div>`:""}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span class="muted" style="font-size:11px">${baht(bc[k])}</span>
+        <span style="font-size:11px;color:${Math.abs(d)<2?"var(--green)":d>0?"var(--red)":"var(--mute)"}">${d>0?"+":""}${d.toFixed(1)}%</span></div></div>`;
+  });
+  h+=`</div>`;
+  // donut
+  const entries=Object.entries(bb); const size=132,stroke=22,r=(size-stroke)/2,C=2*Math.PI*r; let off=0;
+  let segs=entries.map(([b,v],i)=>{const len=(t?v/t:0)*C;const s=`<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${BUCKET_COLORS[i%6]}" stroke-width="${stroke}" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}"/>`;off+=len;return s;}).join("");
+  h+=`<div class="card"><div class="ctitle">แบ่งตามกระเป๋า</div>
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0">
+      <g transform="rotate(-90 ${size/2} ${size/2})">${segs}</g>
+      <text x="50%" y="46%" text-anchor="middle" fill="var(--mute)" font-size="10">รวม</text>
+      <text x="50%" y="58%" text-anchor="middle" fill="var(--gold)" font-size="14" font-weight="700">${(t/1e6).toFixed(2)}M</text></svg>
+    <div style="flex:1;min-width:150px">${entries.map(([b,v],i)=>`<div class="brow"><span><span class="dot" style="background:${BUCKET_COLORS[i%6]}"></span><span style="font-size:13px">${b}</span></span><span class="muted tnum" style="font-size:13px">${(t?v/t*100:0).toFixed(1)}%</span></div>`).join("")}</div></div></div>`;
+  // dilution
+  const thai=bc.thai_equity||0, pct=t?thai/t*100:0, tgt=CLASSES.thai_equity.target;
+  if(pct>tgt+1){
+    let tt=thai,rest=t-thai,rows=[{y:0,p:pct}],yr=0;
+    for(let i=1;i<=6;i++){tt*=1.04;rest=rest*1.07+420000;const p=tt/(tt+rest)*100;rows.push({y:i,p});if(p<=tgt&&!yr)yr=i;}
+    h+=`<div class="card"><div class="ctitle">คาดการณ์: หุ้นไทยเจือจางเอง</div>
+      <div style="font-size:13px;line-height:1.6;margin-bottom:14px">ถ้าหยุดเติมหุ้นไทย ปล่อย DCA ไหลเข้าส่วนอื่น หุ้นไทยจะลดจาก ${pct.toFixed(0)}% สู่เป้า ${tgt}% ใน <b class="gold">~${yr||">6"} ปี</b> โดยไม่ต้องขาย</div>
+      <div style="display:flex;align-items:flex-end;gap:8px;height:120px">${rows.map(rw=>{const hh=16+(rw.p/pct)*86;const hit=rw.p<=tgt;return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px"><span style="font-size:10px;color:${hit?'var(--green)':'var(--mute)'}">${rw.p.toFixed(0)}%</span><div style="width:100%;max-width:30px;height:${hh}px;background:${hit?'var(--green)':'linear-gradient(180deg,#D8745F,#A85647)'};border-radius:4px 4px 0 0"></div><span class="muted" style="font-size:9px">${rw.y===0?'now':'+'+rw.y+'y'}</span></div>`;}).join("")}</div></div>`;
+  }
+  m.innerHTML=h;
+}
+
+function tabUpdate(m){
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div><div style="font-size:15px;font-weight:600">กรอกมูลค่ารายสินทรัพย์</div><div class="muted" style="font-size:12px">เปิดแอป คัดมูลค่ามาใส่ แล้วบันทึก</div></div>
+    ${STATE.editing?`<button class="btn" onclick="saveAll()">บันทึก</button>`:`<button class="btn" onclick="toggleEdit()">แก้ไข</button>`}</div>`;
+  buckets().forEach(b=>{
+    h+=`<div class="card"><div class="ctitle">${b}</div>`;
+    STATE.assets.filter(a=>a.bucket===b).forEach(a=>{
+      h+=`<div class="arow"><div><div style="font-size:14px">${a.name}</div><div style="font-size:11px;color:${CLASSES[a.asset_class].color}">${CLASSES[a.asset_class].label}</div></div>
+      ${STATE.editing?`<input class="num" type="text" inputmode="numeric" value="${a.value}" oninput="setVal('${a.id}',this.value)">`:`<span class="tnum" style="font-weight:600">${baht(a.value)}</span>`}</div>`;
+    });
+    h+=`</div>`;
+  });
+  h+=`<div class="card" style="display:flex;justify-content:space-between;align-items:center"><span class="muted" style="letter-spacing:1px;font-size:13px">รวมทั้งหมด</span><span class="gold tnum" style="font-size:22px;font-weight:700">${baht(total())}</span></div>`;
+  m.innerHTML=h;
+}
+
+function tabDCA(m){
+  const planned=STATE.assets.filter(a=>+a.plan>0);
+  const tp=STATE.assets.reduce((s,a)=>s+(+a.plan||0),0);
+  const cls={}; STATE.assets.forEach(a=>{if(+a.plan>0)cls[a.asset_class]=(cls[a.asset_class]||0)+(+a.plan);});
+  let h=`<div class="card" style="text-align:center;padding:22px"><div class="muted" style="font-size:11px;letter-spacing:2px">เงินลงทุนรายเดือน</div>
+    <div class="gold tnum" style="font-size:30px;font-weight:700;margin:4px 0">${baht(tp)}</div></div>`;
+  h+=`<div class="card"><div class="ctitle">รายกองที่ตัดทุกเดือน</div>`;
+  planned.forEach(a=>{h+=`<div class="arow"><div><div style="font-size:14px">${a.name}</div><div style="font-size:11px;color:${CLASSES[a.asset_class].color}">${CLASSES[a.asset_class].label}</div></div><span class="gold tnum" style="font-weight:600">${baht(a.plan)}<span class="muted" style="font-size:11px">/ด.</span></span></div>`;});
+  h+=`</div><div class="card"><div class="ctitle">เงินใหม่เข้า Asset Class</div>`;
+  CK.filter(k=>cls[k]).forEach(k=>{h+=`<div class="brow"><span><span class="dot" style="background:${CLASSES[k].color}"></span><span style="font-size:14px">${CLASSES[k].label}</span></span><span class="tnum" style="font-weight:600">${baht(cls[k])}<span class="muted" style="font-size:11px"> · ${(cls[k]/tp*100).toFixed(0)}%</span></span></div>`;});
+  h+=`</div>`;
+  m.innerHTML=h;
+}
+
+function tabGrowth(m){
+  const hs=STATE.snapshots;
+  if(!hs.length){m.innerHTML=`<div class="card" style="text-align:center;padding:40px"><div class="gold" style="font-size:15px;margin-bottom:8px">ยังไม่มีประวัติ</div><div class="muted" style="font-size:13px">ไปแท็บอัปเดต กรอกแล้วกดบันทึก จะเก็บ snapshot ให้</div></div>`;return;}
+  const max=Math.max(...hs.map(h=>h.total)),min=Math.min(...hs.map(h=>h.total),0),rng=max-min||1;
+  const first=hs[0].total,last=hs[hs.length-1].total,g=first?((last-first)/first*100):0;
+  let h=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="ctitle">Net Worth รายเดือน</div><div style="font-size:13px;font-weight:600;color:${g>=0?'var(--green)':'var(--red)'}">${g>=0?"▲":"▼"} ${Math.abs(g).toFixed(1)}%</div></div>
+    <div style="display:flex;align-items:flex-end;gap:10px;height:180px;margin-top:20px">${hs.map(s=>{const hpx=24+((s.total-min)/rng)*130;return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><span class="muted tnum" style="font-size:9px">${(s.total/1e6).toFixed(2)}M</span><div style="width:100%;max-width:38px;height:${hpx}px;background:linear-gradient(180deg,#E4CF9B,#C8A35B);border-radius:4px 4px 0 0"></div><span class="muted" style="font-size:10px">${s.month}</span></div>`;}).join("")}</div></div>`;
+  m.innerHTML=h;
+}
+
+function tabTax(m){
+  const dt=derivedTax(), r=calcTax(dt);
+  const ao=STATE.accOpen;
+  let h=`<div class="card" style="text-align:center;padding:26px">
+    <div class="muted" style="font-size:11px;letter-spacing:2px">${r.refund>=0?"ได้ภาษีคืน 🎉":"ต้องจ่ายเพิ่ม ⚠️"}</div>
+    <div class="tnum" style="font-size:38px;font-weight:700;line-height:1.1;margin:6px 0;color:${r.refund>=0?'var(--green)':'var(--red)'}">${baht(Math.abs(r.refund))}</div>
+    <div class="muted" style="font-size:12px">WHT ${baht(r.wht)} − ภาษี ${baht(r.taxPayable)}</div></div>`;
+  // ── Tax Action Dashboard ──
+  const bi=bracketInfo(r.net, r.marginal);
+  const rmfThisYear=dt._rmfMonthly*dt._done, esgThisYear=dt._esgMonthly*dt._done;
+  h+=`<div class="card"><div class="ctitle">📋 สิ่งที่ควรทำตอนนี้</div>`;
+  // ลดขั้นภาษี
+  if(!bi.atBottom && bi.need>0){
+    h+=`<div style="background:#0B1322;border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:13px;line-height:1.7">อยู่ขั้น <b class="gold">${(bi.curRate*100).toFixed(0)}%</b> — ลดหย่อนเพิ่มอีก <b class="green tnum">${baht(bi.need)}</b> จะตกไปขั้น <b class="green">${(bi.lowerRate*100).toFixed(0)}%</b></div>
+      <div class="muted" style="font-size:11px;margin-top:6px">ประหยัดภาษีส่วนนี้ ~${baht(bi.saving)} · ลง ThaiESG ได้เลย (เหลือเพดาน ${baht(r.esgRoom)})</div></div>`;
+  } else if(bi.atBottom){
+    h+=`<div style="background:#0B1322;border-radius:10px;padding:14px;margin-bottom:10px"><div style="font-size:13px;color:var(--green)">✓ อยู่ขั้นภาษีต่ำสุดแล้ว ไม่ต้องลดหย่อนเพิ่มเพื่อลดขั้น</div></div>`;
+  }
+  // สรุปซื้อปีนี้
+  h+=`<div style="display:flex;gap:10px">
+    <div style="flex:1;background:#0B1322;border-radius:10px;padding:12px;text-align:center">
+      <div class="muted" style="font-size:10px;letter-spacing:1px">RMF ซื้อปีนี้</div>
+      <div class="gold tnum" style="font-size:18px;font-weight:700;margin:2px 0">${baht(rmfThisYear)}</div>
+      <div class="muted" style="font-size:9px">ซื้อได้อีก ${baht(r.rmfRoom)}</div></div>
+    <div style="flex:1;background:#0B1322;border-radius:10px;padding:12px;text-align:center">
+      <div class="muted" style="font-size:10px;letter-spacing:1px">ThaiESG ซื้อปีนี้</div>
+      <div class="gold tnum" style="font-size:18px;font-weight:700;margin:2px 0">${baht(esgThisYear)}</div>
+      <div class="muted" style="font-size:9px">ซื้อได้อีก ${baht(r.esgRoom)}</div></div>
+  </div></div>`;
+  // summary
+  const inc=+dt.income||0;
+  const lines=[["รายได้รวม",inc,0],["− ค่าใช้จ่าย 50%",-r.exp,1],["− ส่วนตัว+ครอบครัว+ปกส.",-r.fam,1],
+    ["− ประกัน",-r.ins,1],["− กลุ่มเกษียณ",-r.ret,1],["− ดอกเบี้ยบ้าน",-r.home,1],
+    r.esg>0?["− ThaiESG",-r.esg,1]:null].filter(Boolean).filter(x=>x[1]!==0);
+  h+=`<div class="card"><div class="ctitle">สรุปการคำนวณ</div>`;
+  lines.forEach(([l,v])=>h+=`<div style="display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--line)"><span class="muted" style="font-size:12px">${l}</span><span class="tnum" style="font-size:12px;color:${v<0?'var(--green)':'var(--text)'}">${v<0?'−'+baht(-v):baht(v)}</span></div>`);
+  h+=`<div style="border-top:2px solid #C8A35B50;margin-top:4px;padding-top:10px;display:flex;justify-content:space-between"><span class="gold" style="font-size:13px">เงินได้สุทธิ</span><span class="gold tnum" style="font-weight:700">${baht(r.net)}</span></div>
+    <div style="padding-top:8px;display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600">ภาษีที่คำนวณได้</span><span class="tnum" style="font-weight:700">${baht(r.taxPayable)}</span></div></div>`;
+  // form
+  h+=`<div class="card"><div class="ctitle">กรอก / แก้ข้อมูล</div>`;
+  h+=taxRow("income","รายได้รวมทั้งปี")+taxRow("wht","WHT ถูกหัก");
+  h+=accHead("family","1. ครอบครัว & อื่นๆ","");
+  if(ao.family)h+=taxBool("spouse","คู่สมรสไม่มีรายได้")+taxRow("parents","บิดามารดา (คน)")+taxRow("children","บุตรคนแรก (คน)")+taxRow("children2nd","บุตรคนที่ 2+ (คน)")+taxRow("parentsHealth","ประกันสุขภาพพ่อแม่")+taxRow("ss","ประกันสังคม")+taxRow("homeLoan","ดอกเบี้ยบ้าน")+taxRow("donation","เงินบริจาค");
+  h+=accHead("insurance","2. ประกัน",r.ins>0?baht(r.ins):"");
+  if(ao.insurance)h+=`<div class="alert" style="border-left-color:var(--line);margin:8px 0"><span class="muted" style="font-size:11px">สุขภาพ ≤25k · รวมชีวิต ≤100k</span></div>`+taxRow("lifeInsurance","ประกันชีวิต")+taxRow("healthInsurance","ประกันสุขภาพตัวเอง");
+  h+=accHead("funds","3. กองทุนเพื่อการออม",`${baht(dt.retSum||((+dt.rmf||0)+(+dt.pvd||0)))} / 500k`);
+  if(ao.funds){
+    h+=`<div class="alert" style="border-left-color:var(--line);margin:8px 0"><span class="muted" style="font-size:11px">กลุ่มเกษียณ (RMF+PVD+SSF+บำนาญ) รวม ≤500k</span></div>`;
+    // RMF — AUTO (ประวัติ + ปีนี้จาก DCA)
+    h+=`<div class="arow" style="align-items:flex-start"><div style="flex:1"><div style="font-size:14px">RMF <span style="font-size:9px;background:rgba(77,208,199,.15);color:var(--tech);border-radius:4px;padding:1px 7px">AUTO</span></div><div class="muted" style="font-size:10px;margin-top:2px">ปีก่อนๆ ${baht(dt.rmfHistorical)} + ปีนี้ ${dt._done} ด.×${baht(dt._rmfMonthly)} = ${baht(dt._rmfMonthly*dt._done)}</div></div>
+      <div style="text-align:right"><div class="gold tnum" style="font-weight:700">${baht(dt.rmf)}</div><div style="display:flex;align-items:center;gap:4px;margin-top:4px"><span class="muted" style="font-size:10px">ปีก่อนๆ:</span><input class="num" type="text" inputmode="numeric" value="${dt.rmfHistorical}" oninput="setTax('rmfHistorical',this.value)" style="width:84px;padding:3px 6px;font-size:12px"></div></div></div>`;
+    // PVD — กรอกได้ (ข้อ4)
+    h+=taxRow("pvd","PVD (เงินสะสมปีนี้)");
+    // SSF — แสดงประวัติเฉยๆ ซื้อเพิ่มไม่ได้แล้ว (ข้อ5)
+    h+=`<div class="arow"><div style="flex:1"><div style="font-size:14px;color:var(--mute)">SSF <span style="font-size:9px;background:rgba(138,153,181,.15);color:var(--mute);border-radius:4px;padding:1px 7px">🔒 สิ้นสิทธิ์</span></div><div class="muted" style="font-size:10px">ซื้อเพิ่มไม่ได้แล้ว (สิทธิ์ SSF หมดปี 2567)</div></div><span class="muted tnum">${baht(STATE.tax.ssf||0)}</span></div>`;
+    h+=taxRow("pension","ประกันบำนาญ");
+    h+=`<div style="border-top:1px solid var(--line);margin:8px 0"></div>`;
+    // ThaiESG — AUTO
+    h+=`<div class="arow" style="align-items:flex-start"><div style="flex:1"><div style="font-size:14px">ThaiESG <span style="font-size:9px;background:rgba(77,208,199,.15);color:var(--tech);border-radius:4px;padding:1px 7px">AUTO</span></div><div class="muted" style="font-size:10px;margin-top:2px">ปีก่อนๆ ${baht(dt.esgHistorical)} + ปีนี้ ${dt._done} ด.×${baht(dt._esgMonthly)} = ${baht(dt._esgMonthly*dt._done)}</div></div>
+      <div style="text-align:right"><div class="gold tnum" style="font-weight:700">${baht(dt.thaiesg)}</div><div style="display:flex;align-items:center;gap:4px;margin-top:4px"><span class="muted" style="font-size:10px">ปีก่อนๆ:</span><input class="num" type="text" inputmode="numeric" value="${dt.esgHistorical}" oninput="setTax('esgHistorical',this.value)" style="width:84px;padding:3px 6px;font-size:12px"></div></div></div>`;
+  }
+  h+=`<div style="margin-top:14px;display:flex;gap:8px"><button class="btn" onclick="recomputeTax()" style="flex:1">คำนวณใหม่</button><button class="btn" onclick="saveTax()" style="flex:1">บันทึกภาษี</button></div></div>`;
+  // advisor
+  h+=`<div class="card"><div class="ctitle">Tax Alpha & Liquidity</div>
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <div style="flex:1;background:#0B1322;border-radius:10px;padding:14px 10px;text-align:center"><div class="muted" style="font-size:10px;letter-spacing:1px;margin-bottom:4px">Marginal Rate</div><div class="gold" style="font-size:26px;font-weight:700">${(r.marginal*100).toFixed(0)}%</div></div>
+      <div style="flex:1;background:#0B1322;border-radius:10px;padding:14px 10px;text-align:center"><div class="muted" style="font-size:10px;letter-spacing:1px;margin-bottom:4px">ลดหย่อน ฿1,000</div><div class="green" style="font-size:26px;font-weight:700">฿${(r.marginal*1000).toFixed(0)}</div></div></div>`;
+  [["ThaiESG","#4DD0C7","5 ปี",r.esgRoom],["RMF","#5B8DEF","22 ปี",r.rmfRoom]].forEach(([n,c,l,room])=>{
+    h+=`<div style="padding:12px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between"><div><span style="color:${c};font-weight:700;font-size:15px">${n}</span><span class="muted" style="font-size:11px;margin-left:8px">ล็อค ${l}</span></div><div style="text-align:right"><div class="muted" style="font-size:11px">ซื้อได้อีก ${baht(room)}</div><div class="green tnum" style="font-weight:700;font-size:13px">ประหยัด ~${baht(Math.round(room*r.marginal))}</div></div></div></div>`;
+  });
+  h+=`<div class="alert" style="margin-top:12px"><span class="gold" style="font-weight:700;margin-right:8px">›</span><span style="font-size:12px;line-height:1.6"><b class="gold">แนะนำ:</b> เติม ThaiESG ก่อน ${baht(r.esgRoom)} (ล็อค 5 ปี) ประหยัด ~${baht(Math.round(r.esgRoom*r.marginal))} · แล้วค่อย RMF</span></div></div>`;
+  m.innerHTML=h;
+}
+function taxRow(k,label,ro){const v=STATE.tax[k]??0;return `<div class="arow"><div style="flex:1"><div style="font-size:14px">${label}</div></div>${ro?`<span class="gold tnum" style="font-weight:600">${baht(v)}</span>`:`<input class="num" type="text" inputmode="numeric" value="${v}" oninput="setTax('${k}',this.value)">`}</div>`;}
+function taxBool(k,label){const on=+STATE.tax[k]?1:0;return `<div class="arow"><div style="font-size:14px">${label}</div><button onclick="toggleTaxBool('${k}')" style="background:${on?'var(--gold)':'var(--line)'};color:${on?'var(--ink)':'var(--mute)'};border:none;border-radius:20px;padding:6px 18px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${on?'มี ✓':'ไม่มี'}</button></div>`;}
+function accHead(k,label,badge){return `<button class="acc" onclick="toggleAcc('${k}')"><span style="font-size:14px;font-weight:600">${label}</span><span style="display:flex;align-items:center;gap:10px">${badge?`<span class="muted" style="font-size:12px">${badge}</span>`:""}<span class="gold" style="font-size:12px">${STATE.accOpen[k]?"▲":"▼"}</span></span></button>`;}
+
+// ── handlers ──
+function switchProfile(p){if(p!==STATE.profile){STATE.editing=false;STATE._error=null;loadProfile(p);}}
+function go(t){STATE.tab=t;
+  // อัปเดตปุ่มแท็บ active โดยไม่วาดทั้งหน้า (กัน focus หลุด)
+  document.querySelectorAll("nav .tab").forEach(b=>b.classList.remove("on"));
+  const tabs=["overview","update","dca","growth","tax"];
+  const btn=document.querySelectorAll("nav .tab")[tabs.indexOf(t)];
+  if(btn)btn.classList.add("on");
+  renderTab();
+}
+function toggleEdit(){STATE.editing=true;render();}
+function setVal(id,v){const a=STATE.assets.find(x=>x.id===id);if(a)a.value=num(v);
+  const tot=document.querySelector("header .total");if(tot)tot.textContent=baht(total());
+  const tot2=$(".gold.tnum");if(tot2)tot2.textContent=baht(total());}
+function setTax(k,v){STATE.tax[k]=num(v);} // เก็บค่าเฉยๆ ไม่ re-render กัน focus หลุด
+function recomputeTax(){renderTab();} // กดปุ่มเพื่อคำนวณใหม่
+function toggleTaxBool(k){STATE.tax[k]=+STATE.tax[k]?0:1;renderTab();}
+function toggleAcc(k){STATE.accOpen[k]=!STATE.accOpen[k];renderTab();}
+
+async function saveAll(){
+  STATE.editing=false;
+  try{
+    await apiSave("assets",STATE.profile,STATE.assets);
+    // snapshot
+    const mk=()=>{const d=new Date();const th=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];return th[d.getMonth()]+" "+((d.getFullYear()+543)%100);};
+    const bc=byClass();const snap={month:mk(),total:total(),breakdown:JSON.stringify(bc)};
+    STATE.snapshots=[...STATE.snapshots.filter(s=>s.month!==snap.month),snap];
+    await apiSave("snapshots",STATE.profile,STATE.snapshots);
+    toast("บันทึกแล้ว ✓");
+  }catch(e){toast("บันทึกไม่สำเร็จ",( "var(--red)"));}
+  render();
+}
+async function saveTax(){
+  try{await apiSave("tax",STATE.profile,[STATE.tax]);toast("บันทึกภาษีแล้ว ✓");}
+  catch(e){toast("บันทึกไม่สำเร็จ","var(--red)");}
+}
+
+// ── init ──
+if(API_URL==="PASTE_YOUR_APPS_SCRIPT_URL_HERE"){
+  $("#app").innerHTML=`<div class="center"><div class="card" style="max-width:420px"><div class="gold" style="font-size:15px;margin-bottom:10px">⚙️ ยังไม่ได้ตั้งค่า</div><div class="muted" style="font-size:13px;line-height:1.7">เปิดไฟล์นี้แก้บรรทัด <span class="gold">API_URL</span> ด้านบนสุดของ &lt;script&gt; ให้เป็น URL ของ Apps Script Web App (จาก Phase 1) แล้วเซฟ เปิดใหม่อีกครั้ง</div></div></div>`;
+}else{
+  loadProfile("fern");
+}
+</script>
+</body>
+</html>
