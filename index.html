@@ -64,7 +64,43 @@
   .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .g2 .full{grid-column:1/-1}
   .mini-card{background:#0B1322;border-radius:12px;padding:14px}
+
+  /* ── Light theme ── */
+  body.light{
+    --ink:#F5F6FA; --ink2:#FFFFFF; --line:#E2E6EF; --text:#1E2A3A;
+    --mute:#7A8BA0; --gold:#9A7A3A; --gold2:#7A5E28; --green:#2E8A5E; --red:#C0442F;
+    --tech:#1DA89F;
+    background:linear-gradient(160deg,#EEF1F8 0%,#F5F6FA 100%);
+    color:var(--text);
+  }
+  body.light .card{box-shadow:0 2px 12px rgba(0,0,0,.07)}
+  body.light .mini-card{background:#F0F2F8;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+  body.light input.num{background:#F0F2F8;color:var(--gold)}
+  body.light .track{background:#D8DCE8}
+  body.light .pf.on{color:#fff}
+  body.light .btn{color:#fff}
+
+  /* ── Theme toggle slider ── */
+  .theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+  .theme-toggle span{font-size:14px;line-height:1}
+  .tog-track{
+    width:44px;height:24px;border-radius:12px;
+    background:var(--line);border:1px solid var(--line);
+    position:relative;transition:background .25s;flex-shrink:0;cursor:pointer;
+  }
+  body.light .tog-track{background:#C8A35B}
+  .tog-thumb{
+    position:absolute;top:3px;left:3px;
+    width:16px;height:16px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.3);
+    transition:transform .25s;
+  }
+  body.light .tog-thumb{transform:translateX(20px)}
 </style>
+<script>
+  /* Anti-FOUC: apply saved theme before paint */
+  if(localStorage.getItem('theme')==='light') document.body.classList.add('light');
+</script>
 </head>
 <body>
 <div class="wrap" id="app">
@@ -312,10 +348,17 @@ function render(loading){
   app.innerHTML=`
     <header>
       <div><div class="eyebrow">UNIFIED PORTFOLIO</div><h1>Wealth Ledger</h1></div>
-      <div style="text-align:right">
-        <div class="sub">มูลค่ารวม</div>
-        <div class="total">${baht(t)}</div>
-        <div class="sub">${STATE.profile==="fern"?"เฟิร์น":"นัท"}</div>
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <label class="theme-toggle" onclick="toggleTheme()">
+          <span>🌙</span>
+          <div class="tog-track"><div class="tog-thumb"></div></div>
+          <span>☀️</span>
+        </label>
+        <div>
+          <div class="sub">มูลค่ารวม</div>
+          <div class="total">${baht(t)}</div>
+          <div class="sub">${STATE.profile==="fern"?"เฟิร์น":"นัท"}</div>
+        </div>
       </div>
     </header>
     <div class="profiles">
@@ -634,6 +677,10 @@ function go(t){STATE.tab=t;
   const btn=document.querySelectorAll("nav .tab")[tabs.indexOf(t)];
   if(btn)btn.classList.add("on");
   renderTab();
+}
+function toggleTheme(){
+  document.body.classList.toggle('light');
+  localStorage.setItem('theme', document.body.classList.contains('light')?'light':'dark');
 }
 function toggleEdit(){STATE.editing=true;render();}
 function setVal(id,v){const a=STATE.assets.find(x=>x.id===id);if(a)a.value=num(v);
