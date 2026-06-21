@@ -521,7 +521,12 @@ function toggleEdit(){STATE.editing=true;render();}
 function setVal(id,v){const a=STATE.assets.find(x=>x.id===id);if(a)a.value=num(v);
   const tot=document.querySelector("header .total");if(tot)tot.textContent=baht(total());
   const tot2=$(".gold.tnum");if(tot2)tot2.textContent=baht(total());}
-function setTax(k,v){STATE.tax[k]=num(v);} // เก็บค่าเฉยๆ ไม่ re-render กัน focus หลุด
+let _taxTimer=null;
+function setTax(k,v){
+  STATE.tax[k]=num(v);
+  clearTimeout(_taxTimer);
+  _taxTimer=setTimeout(saveTax,1500);
+}
 function recomputeTax(){renderTab();} // กดปุ่มเพื่อคำนวณใหม่
 function toggleTaxBool(k){STATE.tax[k]=+STATE.tax[k]?0:1;renderTab();}
 function toggleAcc(k){STATE.accOpen[k]=!STATE.accOpen[k];renderTab();}
