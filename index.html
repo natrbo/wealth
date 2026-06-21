@@ -413,45 +413,55 @@ function tabDCA(m){
   const tp=STATE.assets.reduce((s,a)=>s+(+a.plan||0),0);
   const cls={}; STATE.assets.forEach(a=>{if(+a.plan>0)cls[a.asset_class]=(cls[a.asset_class]||0)+(+a.plan);});
 
-  // การ์ดยอดรวม
-  let h=`<div class="card" style="text-align:center;padding:22px">
-    <div class="muted" style="font-size:11px;letter-spacing:2px">เงินลงทุนรายเดือน</div>
-    <div class="gold tnum" style="font-size:30px;font-weight:700;margin:4px 0">${baht(tp)}</div></div>`;
-
-  // ลิสต์กอง DCA พร้อม input
-  h+=`<div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div class="ctitle" style="margin:0">รายกองที่ตัดทุกเดือน</div>
-      ${notPlanned.length?`<select onchange="addDcaFund(this.value);this.value=''" style="background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12px;font-family:inherit">
+  // header: ยอดรวม + dropdown เพิ่มกอง
+  let h=`<div class="card" style="padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div class="muted" style="font-size:10px;letter-spacing:2px">รายเดือนทั้งหมด</div>
+        <div class="gold tnum" style="font-size:28px;font-weight:700;line-height:1.2">${baht(tp)}</div>
+      </div>
+      ${notPlanned.length?`<select onchange="addDcaFund(this.value);this.value=''"
+        style="background:#0B1322;color:var(--text);border:1px solid var(--line);border-radius:10px;
+               padding:8px 12px;font-size:12px;font-family:inherit;max-width:140px">
         <option value="">+ เพิ่มกอง</option>
         ${notPlanned.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')}
       </select>`:''}
-    </div>`;
-  if(!planned.length){
-    h+=`<div class="muted" style="text-align:center;padding:16px;font-size:13px">ยังไม่มีกองที่ตัด — เพิ่มจาก dropdown</div>`;
-  }
-  planned.forEach(a=>{
-    h+=`<div class="arow" style="gap:10px">
-      <div style="flex:1"><div style="font-size:14px">${a.name}</div>
-      <div style="font-size:11px;color:${CLASSES[a.asset_class].color}">${CLASSES[a.asset_class].label}</div></div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <input class="num" type="text" inputmode="numeric" value="${a.plan}"
-          oninput="setPlan('${a.id}',this.value)"
-          style="width:90px;padding:5px 8px;font-size:14px;text-align:right">
-        <span class="muted" style="font-size:11px">/ด.</span>
-        <button onclick="setPlan('${a.id}',0);renderTab()" style="background:none;border:none;color:var(--mute);font-size:16px;cursor:pointer;padding:0 4px">×</button>
-      </div></div>`;
-  });
-  h+=`</div>`;
+    </div>
+    ${!planned.length?`<div class="muted" style="text-align:center;padding:20px 0;font-size:13px">ยังไม่มีกอง — เลือกจาก dropdown</div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${planned.map(a=>`
+        <div style="background:#0B1322;border-radius:12px;padding:14px;position:relative">
+          <button onclick="setPlan('${a.id}',0);renderTab()"
+            style="position:absolute;top:8px;right:10px;background:none;border:none;
+                   color:var(--mute);font-size:14px;cursor:pointer;line-height:1">×</button>
+          <div style="font-size:11px;color:${CLASSES[a.asset_class].color};margin-bottom:4px">${CLASSES[a.asset_class].label}</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;padding-right:16px;line-height:1.3">${a.name}</div>
+          <input class="num" type="text" inputmode="numeric" value="${a.plan}"
+            oninput="setPlan('${a.id}',this.value)"
+            style="width:100%;padding:6px 8px;font-size:16px;font-weight:700;background:#16223A">
+          <div class="muted" style="font-size:10px;margin-top:4px">บาท / เดือน</div>
+        </div>`).join('')}
+    </div>
+  </div>`;
 
-  // เงินใหม่เข้า Asset Class
-  if(Object.keys(cls).length){
-    h+=`<div class="card"><div class="ctitle">เงินใหม่เข้า Asset Class</div>`;
-    CK.filter(k=>cls[k]).forEach(k=>{
-      h+=`<div class="brow"><span><span class="dot" style="background:${CLASSES[k].color}"></span><span style="font-size:14px">${CLASSES[k].label}</span></span>
-        <span class="tnum" style="font-weight:600">${baht(cls[k])}<span class="muted" style="font-size:11px"> · ${(cls[k]/tp*100).toFixed(0)}%</span></span></div>`;
-    });
-    h+=`</div>`;
+  // breakdown แนวนอน
+  if(tp>0){
+    h+=`<div class="card" style="padding:18px">
+      <div class="ctitle">สัดส่วนรายเดือน</div>
+      <div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin-bottom:14px">
+        ${CK.filter(k=>cls[k]).map(k=>`<div style="width:${(cls[k]/tp*100).toFixed(1)}%;background:${CLASSES[k].color}"></div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${CK.filter(k=>cls[k]).map(k=>`
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="dot" style="background:${CLASSES[k].color};flex-shrink:0"></span>
+            <div style="min-width:0">
+              <div style="font-size:11px;color:${CLASSES[k].color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${CLASSES[k].label}</div>
+              <div class="tnum" style="font-size:13px;font-weight:600">${baht(cls[k])} <span class="muted" style="font-size:10px">${(cls[k]/tp*100).toFixed(0)}%</span></div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
   }
   m.innerHTML=h;
 }
