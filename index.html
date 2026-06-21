@@ -61,6 +61,9 @@
     border-radius:50%;animation:sp 0.7s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
   .center{display:grid;place-items:center;min-height:60vh;gap:14px}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .g2 .full{grid-column:1/-1}
+  .mini-card{background:#0B1322;border-radius:12px;padding:14px}
 </style>
 </head>
 <body>
@@ -340,31 +343,48 @@ function renderTab(){
 
 function tabOverview(m){
   const t=total(),bc=byClass(),bb=byBucket();
-  let h=alerts().map(a=>`<div class="alert ${a.w?"warn":""}"><span style="color:${a.w?"var(--red)":"var(--gold)"};font-weight:700;margin-right:8px">${a.w?"▲":"›"}</span>${a.t}</div>`).join("");
-  h+=`<div class="card"><div class="ctitle">สัดส่วน Asset Class เทียบเป้า</div>`;
+  let h=alerts().map(a=>`<div class="alert ${a.w?"warn":""} full"><span style="color:${a.w?"var(--red)":"var(--gold)"};font-weight:700;margin-right:8px">${a.w?"▲":"›"}</span>${a.t}</div>`).join("");
+  h+=`<div class="g2">`;
+
+  // asset class mini-cards
   CK.forEach(k=>{
     const pct=t?bc[k]/t*100:0,tgt=CLASSES[k].target,d=pct-tgt,c=CLASSES[k];
-    h+=`<div style="margin-bottom:18px">
-      <div class="rowh"><span><span class="dot" style="background:${c.color}"></span><span style="font-size:14px">${c.label}</span></span>
-      <span class="tnum"><b>${pct.toFixed(1)}%</b><span class="muted" style="font-size:12px"> / ${tgt}%</span></span></div>
-      <div class="track"><div class="fill" style="width:${Math.min(pct,100)}%;background:${c.color}"></div>
-      <div class="tick" style="left:${Math.min(tgt,100)}%"></div>
-      ${c.ceiling?`<div class="ceil" style="left:${Math.min(c.ceiling,100)}%"></div>`:""}</div>
-      <div style="display:flex;justify-content:space-between;margin-top:4px">
-        <span class="muted" style="font-size:11px">${baht(bc[k])}</span>
-        <span style="font-size:11px;color:${Math.abs(d)<2?"var(--green)":d>0?"var(--red)":"var(--mute)"}">${d>0?"+":""}${d.toFixed(1)}%</span></div></div>`;
+    h+=`<div class="mini-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:11px;color:${c.color};font-weight:600">${c.label}</span>
+        <span style="font-size:11px;color:${Math.abs(d)<2?"var(--green)":d>0?"var(--red)":"var(--mute)"}">${d>0?"+":""}${d.toFixed(1)}%</span>
+      </div>
+      <div class="track" style="margin-bottom:6px">
+        <div class="fill" style="width:${Math.min(pct,100)}%;background:${c.color}"></div>
+        <div class="tick" style="left:${Math.min(tgt,100)}%"></div>
+        ${c.ceiling?`<div class="ceil" style="left:${Math.min(c.ceiling,100)}%"></div>`:""}
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span class="tnum" style="font-size:15px;font-weight:700;color:${c.color}">${pct.toFixed(1)}%</span>
+        <span class="muted" style="font-size:10px;align-self:flex-end">เป้า ${tgt}%</span>
+      </div>
+      <div class="muted tnum" style="font-size:11px;margin-top:2px">${baht(bc[k])}</div>
+    </div>`;
   });
-  h+=`</div>`;
-  // donut
-  const entries=Object.entries(bb); const size=132,stroke=22,r=(size-stroke)/2,C=2*Math.PI*r; let off=0;
+
+  // donut + bucket
+  const entries=Object.entries(bb); const size=110,stroke=20,r=(size-stroke)/2,C=2*Math.PI*r; let off=0;
   let segs=entries.map(([b,v],i)=>{const len=(t?v/t:0)*C;const s=`<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${BUCKET_COLORS[i%6]}" stroke-width="${stroke}" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}"/>`;off+=len;return s;}).join("");
-  h+=`<div class="card"><div class="ctitle">แบ่งตามกระเป๋า</div>
-    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
-    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0">
+  h+=`<div class="mini-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       <g transform="rotate(-90 ${size/2} ${size/2})">${segs}</g>
-      <text x="50%" y="46%" text-anchor="middle" fill="var(--mute)" font-size="10">รวม</text>
-      <text x="50%" y="58%" text-anchor="middle" fill="var(--gold)" font-size="14" font-weight="700">${(t/1e6).toFixed(2)}M</text></svg>
-    <div style="flex:1;min-width:150px">${entries.map(([b,v],i)=>`<div class="brow"><span><span class="dot" style="background:${BUCKET_COLORS[i%6]}"></span><span style="font-size:13px">${b}</span></span><span class="muted tnum" style="font-size:13px">${(t?v/t*100:0).toFixed(1)}%</span></div>`).join("")}</div></div></div>`;
+      <text x="50%" y="44%" text-anchor="middle" fill="var(--mute)" font-size="9">รวม</text>
+      <text x="50%" y="58%" text-anchor="middle" fill="var(--gold)" font-size="13" font-weight="700">${(t/1e6).toFixed(2)}M</text>
+    </svg>
+  </div>
+  <div class="mini-card">
+    <div style="font-size:10px;color:var(--gold2);letter-spacing:1px;margin-bottom:10px">กระเป๋า</div>
+    ${entries.map(([b,v],i)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--line)">
+      <span style="display:flex;align-items:center;gap:6px;font-size:12px"><span class="dot" style="background:${BUCKET_COLORS[i%6]}"></span>${b}</span>
+      <span class="muted tnum" style="font-size:12px">${(t?v/t*100:0).toFixed(0)}%</span>
+    </div>`).join("")}
+  </div>
+  </div>`;
   // dilution
   const thai=bc.thai_equity||0, pct=t?thai/t*100:0, tgt=CLASSES.thai_equity.target;
   if(pct>tgt+1){
@@ -378,18 +398,38 @@ function tabOverview(m){
 }
 
 function tabUpdate(m){
-  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div><div style="font-size:15px;font-weight:600">กรอกมูลค่ารายสินทรัพย์</div><div class="muted" style="font-size:12px">เปิดแอป คัดมูลค่ามาใส่ แล้วบันทึก</div></div>
-    ${STATE.editing?`<button class="btn" onclick="saveAll()">บันทึก</button>`:`<button class="btn" onclick="toggleEdit()">แก้ไข</button>`}</div>`;
+  const t=total();
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div><div style="font-size:15px;font-weight:600">มูลค่ารายสินทรัพย์</div>
+    <div class="muted" style="font-size:12px">เปิดแอป คัดมูลค่ามาใส่ แล้วบันทึก</div></div>
+    ${STATE.editing?`<button class="btn" onclick="saveAll()">บันทึก ✓</button>`:`<button class="btn" onclick="toggleEdit()">แก้ไข</button>`}
+  </div>`;
+
   buckets().forEach(b=>{
-    h+=`<div class="card"><div class="ctitle">${b}</div>`;
-    STATE.assets.filter(a=>a.bucket===b).forEach(a=>{
-      h+=`<div class="arow"><div><div style="font-size:14px">${a.name}</div><div style="font-size:11px;color:${CLASSES[a.asset_class].color}">${CLASSES[a.asset_class].label}</div></div>
-      ${STATE.editing?`<input class="num" type="text" inputmode="numeric" value="${a.value}" oninput="setVal('${a.id}',this.value)">`:`<span class="tnum" style="font-weight:600">${baht(a.value)}</span>`}</div>`;
+    const assets=STATE.assets.filter(a=>a.bucket===b);
+    const bTotal=assets.reduce((s,a)=>s+(+a.value||0),0);
+    h+=`<div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;padding:0 2px">
+        <span style="font-size:11px;color:var(--gold2);letter-spacing:2px;font-weight:600">${b}</span>
+        <span class="tnum muted" style="font-size:12px">${baht(bTotal)}</span>
+      </div>
+      <div class="g2">`;
+    assets.forEach(a=>{
+      h+=`<div class="mini-card">
+        <div style="font-size:10px;color:${CLASSES[a.asset_class].color};margin-bottom:6px">${CLASSES[a.asset_class].label}</div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px;line-height:1.3">${a.name}</div>
+        ${STATE.editing
+          ?`<input class="num" type="text" inputmode="numeric" value="${a.value}" oninput="setVal('${a.id}',this.value)" style="width:100%;font-size:15px">`
+          :`<div class="tnum" style="font-size:16px;font-weight:700;color:var(--gold)">${baht(a.value)}</div>`}
+      </div>`;
     });
-    h+=`</div>`;
+    h+=`</div></div>`;
   });
-  h+=`<div class="card" style="display:flex;justify-content:space-between;align-items:center"><span class="muted" style="letter-spacing:1px;font-size:13px">รวมทั้งหมด</span><span class="gold tnum" style="font-size:22px;font-weight:700">${baht(total())}</span></div>`;
+
+  h+=`<div class="mini-card" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+    <span class="muted" style="font-size:13px">รวมทั้งหมด</span>
+    <span class="gold tnum" style="font-size:22px;font-weight:700">${baht(t)}</span>
+  </div>`;
   m.innerHTML=h;
 }
 
@@ -479,32 +519,50 @@ function tabGrowth(m){
 function tabTax(m){
   const dt=derivedTax(), r=calcTax(dt);
   const ao=STATE.accOpen;
-  let h=`<div class="card" style="text-align:center;padding:26px">
-    <div class="muted" style="font-size:11px;letter-spacing:2px">${r.refund>=0?"ได้ภาษีคืน 🎉":"ต้องจ่ายเพิ่ม ⚠️"}</div>
-    <div class="tnum" style="font-size:38px;font-weight:700;line-height:1.1;margin:6px 0;color:${r.refund>=0?'var(--green)':'var(--red)'}">${baht(Math.abs(r.refund))}</div>
-    <div class="muted" style="font-size:12px">WHT ${baht(r.wht)} − ภาษี ${baht(r.taxPayable)}</div></div>`;
-  // ── Tax Action Dashboard ──
   const bi=bracketInfo(r.net, r.marginal);
   const rmfThisYear=dt.rmf, esgThisYear=dt.thaiesg;
-  h+=`<div class="card"><div class="ctitle">📋 สิ่งที่ควรทำตอนนี้</div>`;
-  // ลดขั้นภาษี
+
+  // summary header — 2 col
+  let h=`<div class="g2" style="margin-bottom:12px">
+    <div class="mini-card" style="text-align:center;padding:18px">
+      <div class="muted" style="font-size:10px;letter-spacing:2px">${r.refund>=0?"คืนภาษี 🎉":"จ่ายเพิ่ม ⚠️"}</div>
+      <div class="tnum" style="font-size:30px;font-weight:700;margin:6px 0;color:${r.refund>=0?'var(--green)':'var(--red)'}">${baht(Math.abs(r.refund))}</div>
+      <div class="muted" style="font-size:10px">WHT ${baht(r.wht)} − ภาษี ${baht(r.taxPayable)}</div>
+    </div>
+    <div class="mini-card" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
+      <div>
+        <div class="muted" style="font-size:10px">Marginal Rate</div>
+        <div class="gold" style="font-size:24px;font-weight:700">${(r.marginal*100).toFixed(0)}%</div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:10px">เงินได้สุทธิ</div>
+        <div class="tnum" style="font-size:16px;font-weight:600">${baht(r.net)}</div>
+      </div>
+    </div>
+  </div>`;
+
+  // action + bracket
+  h+=`<div class="card"><div class="ctitle">📋 แนะนำตอนนี้</div>`;
   if(!bi.atBottom && bi.need>0){
-    h+=`<div style="background:#0B1322;border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="font-size:13px;line-height:1.7">อยู่ขั้น <b class="gold">${(bi.curRate*100).toFixed(0)}%</b> — ลดหย่อนเพิ่มอีก <b class="green tnum">${baht(bi.need)}</b> จะตกไปขั้น <b class="green">${(bi.lowerRate*100).toFixed(0)}%</b></div>
-      <div class="muted" style="font-size:11px;margin-top:6px">ประหยัดภาษีส่วนนี้ ~${baht(bi.saving)} · ลง ThaiESG ได้เลย (เหลือเพดาน ${baht(r.esgRoom)})</div></div>`;
+    h+=`<div class="mini-card" style="margin-bottom:10px">
+      <div style="font-size:13px;line-height:1.7">อยู่ขั้น <b class="gold">${(bi.curRate*100).toFixed(0)}%</b> — ลดหย่อนเพิ่ม <b class="green tnum">${baht(bi.need)}</b> จะตกขั้น <b class="green">${(bi.lowerRate*100).toFixed(0)}%</b></div>
+      <div class="muted" style="font-size:11px;margin-top:4px">ประหยัด ~${baht(bi.saving)} · ThaiESG เหลือเพดาน ${baht(r.esgRoom)}</div>
+    </div>`;
   } else if(bi.atBottom){
-    h+=`<div style="background:#0B1322;border-radius:10px;padding:14px;margin-bottom:10px"><div style="font-size:13px;color:var(--green)">✓ อยู่ขั้นภาษีต่ำสุดแล้ว ไม่ต้องลดหย่อนเพิ่มเพื่อลดขั้น</div></div>`;
+    h+=`<div class="mini-card" style="margin-bottom:10px;color:var(--green);font-size:13px">✓ อยู่ขั้นต่ำสุดแล้ว</div>`;
   }
-  // สรุปซื้อปีนี้
-  h+=`<div style="display:flex;gap:10px">
-    <div style="flex:1;background:#0B1322;border-radius:10px;padding:12px;text-align:center">
-      <div class="muted" style="font-size:10px;letter-spacing:1px">RMF ซื้อปีนี้</div>
-      <div class="gold tnum" style="font-size:18px;font-weight:700;margin:2px 0">${baht(rmfThisYear)}</div>
-      <div class="muted" style="font-size:9px">ซื้อได้อีก ${baht(r.rmfRoom)}</div></div>
-    <div style="flex:1;background:#0B1322;border-radius:10px;padding:12px;text-align:center">
-      <div class="muted" style="font-size:10px;letter-spacing:1px">ThaiESG ซื้อปีนี้</div>
-      <div class="gold tnum" style="font-size:18px;font-weight:700;margin:2px 0">${baht(esgThisYear)}</div>
-      <div class="muted" style="font-size:9px">ซื้อได้อีก ${baht(r.esgRoom)}</div></div>
+  // RMF + ESG stat
+  h+=`<div class="g2">
+    <div class="mini-card" style="text-align:center">
+      <div class="muted" style="font-size:10px">RMF ปีนี้</div>
+      <div class="gold tnum" style="font-size:17px;font-weight:700;margin:4px 0">${baht(rmfThisYear)}</div>
+      <div class="muted" style="font-size:9px">เหลือ ${baht(r.rmfRoom)}</div>
+    </div>
+    <div class="mini-card" style="text-align:center">
+      <div class="muted" style="font-size:10px">ThaiESG ปีนี้</div>
+      <div class="gold tnum" style="font-size:17px;font-weight:700;margin:4px 0">${baht(esgThisYear)}</div>
+      <div class="muted" style="font-size:9px">เหลือ ${baht(r.esgRoom)}</div>
+    </div>
   </div></div>`;
   // summary
   const inc=+dt.income||0;
