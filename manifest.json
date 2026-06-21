@@ -1,0 +1,13 @@
+{
+  "name": "Wealth Ledger",
+  "short_name": "Wealth",
+  "description": "พอร์ตสินทรัพย์รวม & วางแผนภาษี",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0E1726",
+  "theme_color": "#C8A35B",
+  "lang": "th",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
