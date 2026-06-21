@@ -456,18 +456,135 @@ function buckets(){return [...new Set(STATE.assets.map(a=>a.bucket))];}
 
 function alerts(){
   const out=[],t=total(),bc=byClass();
+
+  // helper: top assets of a class (non-zero, sorted by value desc)
+  const topOf=(cls,n=3)=>STATE.assets
+    .filter(a=>a.asset_class===cls&&(+a.value||0)>0)
+    .sort((a,b)=>(+b.value||0)-(+a.value||0))
+    .slice(0,n);
+
+  // helper: assets with active DCA plan in a class
+  const dcaOf=(cls)=>STATE.assets.filter(a=>a.asset_class===cls&&(+a.plan||0)>0);
+
   CK.forEach(k=>{
     const pct=t?bc[k]/t*100:0, tgt=CLASSES[k].target, d=pct-tgt;
-    if(k==="thai_equity"&&d>5)out.push({w:1,t:`หุ้นไทย ${pct.toFixed(1)}% เกินเป้า ${tgt}% — หยุดเติม ปล่อย DCA เจือจาง`});
-    if(k==="gold"&&d<-3)out.push({w:0,t:`ทองคำ ${pct.toFixed(1)}% ต่ำกว่าเป้า ${tgt}% — DCA ต่อ`});
-    if(k==="dm_tech"){const c=CLASSES[k].ceiling;if(pct>c)out.push({w:1,t:`Tech ${pct.toFixed(1)}% เกิน ceiling ${c}%`});
-      else if(pct>c-2)out.push({w:0,t:`Tech ${pct.toFixed(1)}% ใกล้ ceiling ${c}%`});}
-    if(k==="dm_core"&&d<-5)out.push({w:0,t:`หุ้นกระจาย ${pct.toFixed(1)}% ต่ำกว่าเป้า ${tgt}%`});
-    if(k==="em_china"){const c=CLASSES[k].ceiling;if(pct>c)out.push({w:1,t:`จีน ${pct.toFixed(1)}% เกิน ceiling ${c}% — tactical เท่านั้น`});}
-    if(k==="em_growth"&&d<-3)out.push({w:0,t:`EM โต ${pct.toFixed(1)}% ต่ำกว่าเป้า ${tgt}% — เติมได้`});
+    const excess=Math.round((pct-tgt)/100*t);
+    const deficit=Math.round((tgt-pct)/100*t);
+
+    // ── Thai Equity overweight ──
+    if(k==="thai_equity"&&d>5){
+      const sellable=STATE.assets
+        .filter(a=>a.asset_class==="thai_equity"&&!["PVD"].includes(a.bucket)&&(+a.value||0)>0)
+        .sort((a,b)=>(+b.value||0)-(+a.value||0));
+      out.push({w:1,
+        title:`หุ้นไทย ${pct.toFixed(1)}% — เกินเป้า ${tgt}% อยู่ ${d.toFixed(1)}%`,
+        body:`เกินเป้า ~${baht(excess)} · หยุด DCA หุ้นไทยทั้งหมด ปล่อยให้เจือจางเอง`,
+        action:sellable.length
+          ?`พิจารณาขาย/สวิตช์: ${sellable.map(a=>a.name).join(", ")} → เพิ่มสัดส่วน dm_core`
+          :`PVD เป็นหุ้นไทยหลัก — ปล่อยเจือจางตามการเติบโตของพอร์ตรวม`,
+        chips:sellable.map(a=>a.name),
+      });
+    }
+
+    // ── Thai Equity slightly over ──
+    if(k==="thai_equity"&&d>2&&d<=5){
+      out.push({w:0,
+        title:`หุ้นไทย ${pct.toFixed(1)}% — เกินเป้าเล็กน้อย`,
+        body:`เกินเป้า ~${baht(excess)} · หยุด DCA หุ้นไทยไว้ก่อน`,
+        action:`ไม่ต้องเทขาย — ปล่อยพอร์ตส่วนอื่นโต แล้วสัดส่วนจะลดเอง`,
+      });
+    }
+
+    // ── dm_core underweight ──
+    if(k==="dm_core"&&d<-5){
+      const dca=dcaOf("dm_core");
+      out.push({w:0,
+        title:`หุ้นกระจาย (Global) ${pct.toFixed(1)}% — ต่ำกว่าเป้า ${tgt}%`,
+        body:`ขาดอยู่ ~${baht(deficit)} · ควรเป็นกลุ่มหลักของพอร์ต`,
+        action:dca.length
+          ?`เพิ่มวงเงิน DCA: ${dca.map(a=>`${a.name} (${baht(a.plan)}/ด.)`).join(", ")}`
+          :`เริ่ม DCA กองหุ้นโลก เช่น KKP GNP RMF / SCBS&P500 เพื่อเติมสัดส่วน`,
+      });
+    }
+
+    // ── Gold underweight ──
+    if(k==="gold"&&d<-3){
+      const dca=dcaOf("gold");
+      out.push({w:0,
+        title:`ทองคำ ${pct.toFixed(1)}% — ต่ำกว่าเป้า ${tgt}%`,
+        body:`ขาดอยู่ ~${baht(deficit)} · ทองคำช่วย hedge ความผันผวน`,
+        action:dca.length
+          ?`DCA ต่อเนื่อง: ${dca.map(a=>a.name).join(", ")} (${baht(dca.reduce((s,a)=>s+(+a.plan||0),0))}/ด.)`
+          :`เพิ่ม DCA กองทอง เช่น SCBGOLDHRMF เข้าแผนเดือนนี้`,
+      });
+    }
+
+    // ── Tech ceiling breach ──
+    if(k==="dm_tech"){
+      const c=CLASSES[k].ceiling;
+      if(pct>c){
+        const top=topOf("dm_tech",2);
+        out.push({w:1,
+          title:`Tech ${pct.toFixed(1)}% — เกิน ceiling ${c}%`,
+          body:`เกิน ceiling ~${baht(excess)} · ความเสี่ยงกระจุกตัวสูง`,
+          action:`หยุด DCA Tech ทั้งหมด${top.length?` · รอโอกาสสวิตช์บางส่วนจาก: ${top.map(a=>a.name).join(", ")} → dm_core`:""}`,
+          chips:top.map(a=>a.name),
+        });
+      } else if(pct>c-2){
+        out.push({w:0,
+          title:`Tech ${pct.toFixed(1)}% — ใกล้ ceiling ${c}%`,
+          body:`เหลือห่าง ceiling แค่ ${(c-pct).toFixed(1)}% (~${baht(Math.round((c-pct)/100*t))})`,
+          action:`ชะลอ DCA Tech — ถ้าตลาดขึ้นแรงอาจชน ceiling เร็ว`,
+        });
+      }
+    }
+
+    // ── China over ceiling ──
+    if(k==="em_china"){
+      const c=CLASSES[k].ceiling;
+      if(pct>c){
+        const top=topOf("em_china",2);
+        out.push({w:1,
+          title:`จีน ${pct.toFixed(1)}% — เกิน ceiling ${c}%`,
+          body:`เกิน ceiling ~${baht(excess)} · จีนเป็น tactical เท่านั้น`,
+          action:`หยุด DCA จีน${top.length?` · พิจารณาสวิตช์: ${top.map(a=>a.name).join(", ")} → em_growth (อินเดีย/เวียดนาม)`:""}`,
+          chips:top.map(a=>a.name),
+        });
+      }
+    }
+
+    // ── EM Growth underweight ──
+    if(k==="em_growth"&&d<-3){
+      const dca=dcaOf("em_growth");
+      out.push({w:0,
+        title:`EM โต (อินเดีย+เวียดนาม) ${pct.toFixed(1)}% — ต่ำกว่าเป้า ${tgt}%`,
+        body:`ขาดอยู่ ~${baht(deficit)} · เป็น satellite ที่มี upside สูง`,
+        action:dca.length
+          ?`เพิ่ม DCA: ${dca.map(a=>a.name).join(", ")}`
+          :`เริ่ม DCA กองอินเดีย/เวียดนาม เช่น B-INDIARMF / KFVIETRMF`,
+      });
+    }
+
+    // ── REIT missing ──
+    if(k==="reit"&&pct<0.5&&tgt>0){
+      out.push({w:0,
+        title:`REIT ${pct.toFixed(1)}% — ต่ำมาก (เป้า ${tgt}%)`,
+        body:`ขาดอยู่ ~${baht(deficit)} · REIT ให้ yield และ diversify`,
+        action:`พิจารณาเพิ่ม REIT เช่น SCBFP-SSF ในรอบลงทุนถัดไป`,
+      });
+    }
   });
+
+  // ── Retirement bucket near cap ──
   const dt=derivedTax(), ru=(+dt.rmf||0)+(+dt.pvd||0)+(+dt.ssf||0)+(+dt.pension||0);
-  if(ru/500000>0.9)out.push({w:1,t:`กลุ่มเกษียณใช้ไป ${(ru/500000*100).toFixed(0)}% ของ 500k — ใกล้เต็ม`});
+  if(ru/500000>0.9){
+    out.push({w:1,
+      title:`กลุ่มเกษียณ ${(ru/500000*100).toFixed(0)}% ของ 500k — ใกล้เต็ม`,
+      body:`ใช้ไปแล้ว ${baht(ru)} จาก 500k`,
+      action:`เหลือ ${baht(500000-ru)} — ใช้ ThaiESG หรือประกันบำนาญแทน`,
+    });
+  }
+
   return out;
 }
 
@@ -519,7 +636,21 @@ function tabOverview(m){
   const t=total(),bc=byClass(),bb=byBucket();
 
   // ── alerts ──
-  const alertsHtml=alerts().map(a=>`<div class="alert ${a.w?"warn":""}"><span style="color:${a.w?"var(--red)":"var(--gold)"};font-weight:700;margin-right:8px">${a.w?"▲":"›"}</span>${a.t}</div>`).join("");
+  const alertsHtml=alerts().map(a=>{
+    const col=a.w?'var(--red)':'var(--gold)';
+    const chips=a.chips&&a.chips.length
+      ?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${a.chips.map(n=>`<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${a.w?'rgba(216,116,95,.15)':'rgba(200,163,91,.12)'};color:${col};border:1px solid ${col}40">${n}</span>`).join('')}</div>`
+      :'';
+    return `<div class="alert ${a.w?'warn':''}" style="padding:13px 15px">
+      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${a.body||a.action?6:0}px">
+        <span style="color:${col};font-weight:700;font-size:13px;flex-shrink:0;margin-top:1px">${a.w?'▲':'›'}</span>
+        <span style="font-size:13px;font-weight:600;line-height:1.4">${a.title||a.t||''}</span>
+      </div>
+      ${a.body?`<div class="muted" style="font-size:11px;line-height:1.5;margin-left:21px;margin-bottom:${a.action?5:0}px">${a.body}</div>`:''}
+      ${a.action?`<div style="margin-left:21px;font-size:11px;line-height:1.5;color:${col};background:${a.w?'rgba(216,116,95,.08)':'rgba(200,163,91,.08)'};border-radius:7px;padding:6px 9px">⟶ ${a.action}</div>`:''}
+      ${chips}
+    </div>`;
+  }).join("");
 
   // ── donut ──
   const entries=Object.entries(bb);
