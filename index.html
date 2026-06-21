@@ -214,6 +214,25 @@ const CLASSES = {
 const CK = Object.keys(CLASSES);
 const BUCKET_COLORS=["#C8A35B","#5B8DEF","#5FB98E","#B98ED8","#E0975C","#D8745F"];
 
+// ── Per-profile target overrides ──
+// เฉพาะ key ที่ต่างจาก CLASSES จะ override, ที่เหลือใช้ค่า default
+const PROFILE_TARGETS = {
+  nut: {
+    dm_tech:    {target:30, ceiling:35},
+    dm_core:    {target:28},
+    fixed:      {target:14},
+    thai_equity:{target:11},
+    em_growth:  {target:6},
+    em_china:   {target:6, ceiling:8},
+    gold:       {target:5},
+    reit:       {target:0},
+  }
+};
+// ผลรวม nut: 30+28+14+11+6+6+5+0 = 100 ✓
+
+// helper: คืน CLASSES[k] merged กับ profile override ของ STATE.profile
+function cls(k){ return {...CLASSES[k], ...(PROFILE_TARGETS[STATE.profile]||{})[k]}; }
+
 // ── SEED ──
 const SEED = {
   fern: {
@@ -467,9 +486,11 @@ function alerts(){
   const dcaOf=(cls)=>STATE.assets.filter(a=>a.asset_class===cls&&(+a.plan||0)>0);
 
   CK.forEach(k=>{
-    const pct=t?bc[k]/t*100:0, tgt=CLASSES[k].target, d=pct-tgt;
+    const c=cls(k);
+    const pct=t?bc[k]/t*100:0, tgt=c.target, d=pct-tgt;
     const excess=Math.round((pct-tgt)/100*t);
     const deficit=Math.round((tgt-pct)/100*t);
+    if(tgt===0) return; // ซ่อน class ที่ตั้ง target=0 ออกจาก alert
 
     // ── Thai Equity overweight ──
     if(k==="thai_equity"&&d>5){
@@ -520,32 +541,32 @@ function alerts(){
     }
 
     // ── Tech ceiling breach ──
-    if(k==="dm_tech"){
-      const c=CLASSES[k].ceiling;
-      if(pct>c){
+    if(k==="dm_tech"&&c.ceiling){
+      const ceil=c.ceiling;
+      if(pct>ceil){
         const top=topOf("dm_tech",2);
         out.push({w:1,
-          title:`Tech ${pct.toFixed(1)}% — เกิน ceiling ${c}%`,
+          title:`Tech ${pct.toFixed(1)}% — เกิน ceiling ${ceil}%`,
           body:`เกิน ceiling ~${baht(excess)} · ความเสี่ยงกระจุกตัวสูง`,
           action:`หยุด DCA Tech ทั้งหมด${top.length?` · รอโอกาสสวิตช์บางส่วนจาก: ${top.map(a=>a.name).join(", ")} → dm_core`:""}`,
           chips:top.map(a=>a.name),
         });
-      } else if(pct>c-2){
+      } else if(pct>ceil-2){
         out.push({w:0,
-          title:`Tech ${pct.toFixed(1)}% — ใกล้ ceiling ${c}%`,
-          body:`เหลือห่าง ceiling แค่ ${(c-pct).toFixed(1)}% (~${baht(Math.round((c-pct)/100*t))})`,
+          title:`Tech ${pct.toFixed(1)}% — ใกล้ ceiling ${ceil}%`,
+          body:`เหลือห่าง ceiling แค่ ${(ceil-pct).toFixed(1)}% (~${baht(Math.round((ceil-pct)/100*t))})`,
           action:`ชะลอ DCA Tech — ถ้าตลาดขึ้นแรงอาจชน ceiling เร็ว`,
         });
       }
     }
 
     // ── China over ceiling ──
-    if(k==="em_china"){
-      const c=CLASSES[k].ceiling;
-      if(pct>c){
+    if(k==="em_china"&&c.ceiling){
+      const ceil=c.ceiling;
+      if(pct>ceil){
         const top=topOf("em_china",2);
         out.push({w:1,
-          title:`จีน ${pct.toFixed(1)}% — เกิน ceiling ${c}%`,
+          title:`จีน ${pct.toFixed(1)}% — เกิน ceiling ${ceil}%`,
           body:`เกิน ceiling ~${baht(excess)} · จีนเป็น tactical เท่านั้น`,
           action:`หยุด DCA จีน${top.length?` · พิจารณาสวิตช์: ${top.map(a=>a.name).join(", ")} → em_growth (อินเดีย/เวียดนาม)`:""}`,
           chips:top.map(a=>a.name),
@@ -675,7 +696,7 @@ function tabOverview(m){
 
   // ── dilution ──
   let dilutionHtml="";
-  const thai=bc.thai_equity||0,thaiPct=t?thai/t*100:0,thaiTgt=CLASSES.thai_equity.target;
+  const thai=bc.thai_equity||0,thaiPct=t?thai/t*100:0,thaiTgt=cls("thai_equity").target;
   if(thaiPct>thaiTgt+1){
     let tt=thai,rest=t-thai,rows=[{y:0,p:thaiPct}],yr=0;
     for(let i=1;i<=6;i++){tt*=1.04;rest=rest*1.07+420000;const p=tt/(tt+rest)*100;rows.push({y:i,p});if(p<=thaiTgt&&!yr)yr=i;}
@@ -687,7 +708,9 @@ function tabOverview(m){
   // ── asset class mini-cards (always 2-col on mobile, 4-col on desktop via CSS) ──
   let cardsHtml="";
   CK.forEach(k=>{
-    const pct=t?bc[k]/t*100:0,tgt=CLASSES[k].target,d=pct-tgt,c=CLASSES[k];
+    const c=cls(k);
+    const pct=t?bc[k]/t*100:0,tgt=c.target,d=pct-tgt;
+    if(tgt===0) return; // ซ่อน class ที่ target=0 (เช่น REIT สำหรับนัท)
     cardsHtml+=`<div class="mini-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
         <span style="font-size:10px;color:${c.color};font-weight:600;line-height:1.3">${c.label}</span>
