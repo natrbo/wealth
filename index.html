@@ -71,52 +71,122 @@
   .g2 .full{grid-column:1/-1}
   .mini-card{background:var(--ink3);border-radius:12px;padding:14px}
 
-  /* ── Light theme ── */
+  /* ── Light theme — Fintech Clean (inspired by Finomena / iTAX) ── */
   body.light{
-    --ink:#F0F3FA;
-    --ink2:#FFFFFF;
-    --ink3:#E4E9F5;
-    --line:#CDD5E8;
-    --text:#1A2640;
-    --mute:#5A6E8A;
-    --gold:#8A5E10;
-    --gold2:#6B4608;
-    --green:#156640;
-    --red:#B02A18;
-    --tech:#077A76;
-    background:linear-gradient(150deg,#E8EDF8 0%,#F0F3FA 100%);
+    --ink:  #F5F7FB;   /* warm off-white · page bg     */
+    --ink2: #FFFFFF;   /* pure white · card surface    */
+    --ink3: #EEF1F8;   /* input / mini-card bg         */
+    --line: #DDE3EF;   /* subtle border                */
+    --text: #1A2540;   /* deep navy · primary text     */
+    --mute: #6B7A99;   /* mid-blue-grey · secondary    */
+    --gold: #C8960C;   /* true coin-gold · money values */
+    --gold2:#9A6F00;   /* deep gold · ctitle           */
+    --green:#0C8A4E;   /* rich green · gains           */
+    --red:  #D93025;   /* clear red · losses           */
+    --tech: #1D6FD8;   /* fintech blue · tech/em       */
+    background:linear-gradient(160deg,#F5F7FB 0%,#EBEEf7 100%);
     color:var(--text);
   }
-  /* cards & surfaces */
-  body.light .card{background:#fff;border-color:var(--line);box-shadow:0 2px 14px rgba(30,50,90,.07)}
-  body.light .mini-card{background:var(--ink3);box-shadow:none}
-  body.light input.num{background:var(--ink3);color:var(--gold);border-color:var(--line)}
-  body.light select{background:var(--ink3)!important;color:var(--text)!important;border-color:var(--line)!important}
-  /* nav / tabs */
-  body.light nav{border-bottom-color:var(--line)}
-  body.light .tab{color:var(--mute)}
-  body.light .tab.on{color:var(--gold);border-bottom-color:var(--gold)}
-  /* profile buttons */
-  body.light .pf{border-color:var(--line);color:var(--mute)}
-  body.light .pf.on{color:#fff;background:linear-gradient(135deg,#C8961E,#8A5E10)}
-  /* primary button */
-  body.light .btn{background:linear-gradient(135deg,#C8961E,#8A5E10);color:#fff}
-  /* accordion */
-  body.light .acc{color:var(--text);border-top-color:var(--line)}
-  /* alerts */
-  body.light .alert{background:#F5F7FF;border-left-color:var(--gold)}
-  body.light .alert.warn{border-left-color:var(--red)}
-  /* rows */
-  body.light .arow{border-top-color:var(--line)}
-  body.light .brow{border-top-color:var(--line)}
-  /* toast */
-  body.light .toast{background:#fff;border-color:var(--green);color:var(--green)}
-  /* eyebrow / headings */
-  body.light .eyebrow{color:var(--gold)}
-  body.light .ctitle{color:var(--gold2)}
+
+  /* ── cards & surfaces ── */
+  body.light .card{
+    background:#fff;
+    border:1px solid #DDE3EF;
+    box-shadow:0 2px 8px rgba(20,35,80,.05), 0 12px 40px rgba(20,35,80,.06);
+  }
+  body.light .mini-card{
+    background:#F5F7FB;
+    border:1px solid #DDE3EF;
+    box-shadow:none;
+  }
+
+  /* ── inputs & sliders ── */
+  body.light input.num{
+    background:#EEF1F8;
+    color:#1A2540;
+    border-color:#DDE3EF;
+    font-weight:600;
+  }
+  body.light input.num:focus{border-color:#1D6FD8;box-shadow:0 0 0 3px rgba(29,111,216,.12)}
+  body.light select{
+    background:#EEF1F8!important;
+    color:#1A2540!important;
+    border-color:#DDE3EF!important;
+  }
+  body.light input[type=range]{
+    background:linear-gradient(90deg,#C8960C 0%,#C8960C var(--pct,50%),#DDE3EF var(--pct,50%));
+    accent-color:#C8960C;
+  }
+  body.light input[type=range]::-webkit-slider-thumb{
+    background:#C8960C;
+    box-shadow:0 1px 4px rgba(200,150,12,.40);
+  }
+  body.light input[type=range]::-moz-range-thumb{
+    background:#C8960C;
+    box-shadow:0 1px 4px rgba(200,150,12,.40);
+  }
+
+  /* ── nav & tabs ── */
+  body.light nav{
+    background:#fff;
+    border-bottom:1px solid #DDE3EF;
+    box-shadow:0 1px 6px rgba(20,35,80,.04);
+  }
+  body.light .tab{color:var(--mute);font-weight:500}
+  body.light .tab.on{color:#1D6FD8;border-bottom-color:#1D6FD8;font-weight:600}
+
+  /* ── profile buttons ── */
+  body.light .pf{border-color:#DDE3EF;color:var(--mute);background:#fff}
+  body.light .pf:hover{border-color:#1D6FD8;color:#1D6FD8}
+  body.light .pf.on{
+    background:#1D6FD8;
+    color:#fff;border-color:transparent;
+    box-shadow:0 4px 14px rgba(29,111,216,.30);
+  }
+
+  /* ── primary button ── */
+  body.light .btn{
+    background:#1D6FD8;
+    color:#fff;
+    box-shadow:0 4px 12px rgba(29,111,216,.30);
+  }
+  body.light .btn:hover{background:#1557B8;box-shadow:0 6px 18px rgba(29,111,216,.40)}
+
+  /* ── accordion & rows ── */
+  body.light .acc{color:var(--text);border-top-color:#DDE3EF}
+  body.light .arow{border-top-color:#DDE3EF}
+  body.light .brow{border-top-color:#DDE3EF}
+
+  /* ── alerts ── */
+  body.light .alert{
+    background:#FFFDF0;
+    border-left-color:#C8960C;
+    box-shadow:0 1px 4px rgba(200,150,12,.08);
+  }
+  body.light .alert.warn{
+    background:#FFF5F5;
+    border-left-color:#D93025;
+    box-shadow:0 1px 4px rgba(217,48,37,.06);
+  }
+
+  /* ── toast ── */
+  body.light .toast{
+    background:#fff;
+    border-color:#0C8A4E;
+    color:#0C8A4E;
+    box-shadow:0 8px 32px rgba(20,35,80,.12);
+  }
+
+  /* ── eyebrow / headings ── */
+  body.light .eyebrow{color:#9A6F00}
+  body.light .ctitle{color:#6B7A99;letter-spacing:1.2px;font-weight:600}
   body.light h1{color:var(--text)}
-  /* toggle track in light mode */
-  body.light .tog-track{background:linear-gradient(135deg,#C8961E,#8A5E10)}
+
+  /* ── theme toggle ── */
+  body.light .tog-track{background:#1D6FD8}
+
+  /* ── thermometer bar ── */
+  body.light .thermo-bar{background:#DDE3EF}
 
   /* ── Theme toggle slider ── */
   .theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
