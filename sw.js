@@ -1,5 +1,6 @@
 const CACHE = 'wealth-ledger-v1';
-const STATIC = ['/index.html', '/manifest.json', '/icon.svg'];
+// Cache เฉพาะไฟล์ static ที่ไม่เปลี่ยน — HTML ไม่รวม
+const STATIC = ['/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
@@ -16,10 +17,21 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Let Apps Script API calls go straight to network — never cache POST or GAS responses
+  // ข้าม Apps Script API และ POST ทั้งหมด
   if (e.request.url.includes('script.google.com')) return;
   if (e.request.method !== 'GET') return;
 
+  const url = new URL(e.request.url);
+
+  // HTML → network-first เสมอ (ได้เวอร์ชันล่าสุด)
+  if (url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.endsWith('/')) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // static assets → cache-first
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
