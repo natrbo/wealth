@@ -126,23 +126,24 @@ const SEED = {
     ],
     tax:{income:1683028,wht:225026,ss:10500,pvd:72423,spouse:0,parents:0,children:0,children2nd:0,
       parentsHealth:0,lifeInsurance:0,healthInsurance:0,pension:0,ssf:0,homeLoan:0,donation:0,
-      rmfHistorical:90285,esgHistorical:25000},
+      rmfBought:87285,esgBought:30000},
   },
   nut: {
     assets:[
-      {id:"n_inno",bucket:"BBLAM",name:"RMFBINNOTECH",asset_class:"dm_tech",value:129140,plan:1500},
+      {id:"n_inno",bucket:"BBLAM",name:"RMFBINNOTECH",asset_class:"dm_tech",value:129140,plan:1000},
       {id:"n_gold",bucket:"BBLAM",name:"BGOLDRMF",asset_class:"gold",value:3929,plan:500},
+      {id:"n_china_rmf",bucket:"BBLAM",name:"RMFBCHINAA",asset_class:"em_china",value:0,plan:2750},
       {id:"n_gh",bucket:"KAsset",name:"K-GHRMF (หุ้นโลก)",asset_class:"dm_core",value:65709,plan:0},
       {id:"n_usa",bucket:"KAsset",name:"K-USA-SSF (S&P500)",asset_class:"dm_core",value:20036,plan:0},
-      {id:"n_china",bucket:"KAsset",name:"K-CHINA-SSF",asset_class:"em_china",value:2451,plan:1500},
+      {id:"n_china",bucket:"SSF",name:"K-CHINA-SSF",asset_class:"em_china",value:2451,plan:0},
       {id:"n_fixed",bucket:"KAsset",name:"K-FIXEDPLUS-SSF",asset_class:"fixed",value:6422,plan:0},
       {id:"n_firmf",bucket:"KAsset",name:"K-FIRMF",asset_class:"fixed",value:2533,plan:0},
-      {id:"n_esg",bucket:"SCB",name:"SCBTM(ThaiESG) ผสม",asset_class:"thai_equity",value:0,plan:13000},
-      {id:"n_us_dca",bucket:"BBLAM",name:"RMFBUSPASSIVE",asset_class:"dm_core",value:0,plan:2000},
+      {id:"n_esg",bucket:"SCB",name:"SCBTM(ThaiESG) ผสม",asset_class:"thai_equity",value:0,plan:10000},
+      {id:"n_us_dca",bucket:"BBLAM",name:"RMFBUSPASSIVE",asset_class:"dm_core",value:0,plan:2650},
     ],
     tax:{income:1439111,wht:139245,ss:10500,pvd:48400,spouse:0,parents:1,children:0,children2nd:0,
       parentsHealth:0,lifeInsurance:4510,healthInsurance:33000,pension:0,ssf:0,homeLoan:62000,donation:0,
-      rmfHistorical:6000,esgHistorical:0},
+      rmfBought:6000,esgBought:0},
   },
 };
 
@@ -153,11 +154,12 @@ const baht = n => "฿"+Math.round(+n||0).toLocaleString("th-TH");
 const num = v => { const c=String(v).replace(/[^0-9.]/g,""); return c===""?0:parseFloat(c)||0; };
 const $ = (sel,el=document)=>el.querySelector(sel);
 
-// ── completed DCA months (เริ่ม ก.ค. 2026, ตัดวันที่ 5) ──
-function completedMonths(start="2026-07"){
-  const [sy,sm]=start.split("-").map(Number);
-  const d=new Date(), ny=d.getFullYear(), nm=d.getMonth()+1, nd=d.getDate();
-  let n=(ny-sy)*12+(nm-sm); if(nd>=5)n+=1; return Math.max(0,n);
+// ── จำนวนงวด DCA ที่เหลือในปีนี้ (งวดถัดไป → ธ.ค.) ตัดวันที่ 5 ──
+function remainingMonths(dcaDay=5){
+  const d=new Date(), mo=d.getMonth()+1, day=d.getDate();
+  let next = day < dcaDay ? mo : mo+1;   // ถ้ายังไม่ถึงวันตัด งวดเดือนนี้ยังนับ
+  if(next>12) return 0;
+  return 12 - next + 1;                  // งวด next..ธ.ค.
 }
 
 // ╔═══ Tax Engine 2569 ═══╗
@@ -204,14 +206,9 @@ function calcTax(s){
     retireRoom:Math.max(500000-retSum,0)};
 }
 
-// derived tax: rmf/thaiesg auto จาก plan × เดือน
 function derivedTax(){
-  const t=STATE.tax, done=completedMonths();
-  const rmfMonthly=STATE.assets.filter(a=>a.bucket==="RMF"&&(+a.plan>0)).reduce((s,a)=>s+(+a.plan||0),0);
-  const esgAsset=STATE.assets.find(a=>/esg/i.test(a.id)||/ThaiESG/i.test(a.name));
-  const esgMonthly=esgAsset?(+esgAsset.plan||0):0;
-  return {...t, rmf:(+t.rmfHistorical||0)+rmfMonthly*done, thaiesg:(+t.esgHistorical||0)+esgMonthly*done,
-    _done:done, _rmfMonthly:rmfMonthly, _esgMonthly:esgMonthly};
+  const t=STATE.tax;
+  return {...t, rmf:+t.rmfBought||0, thaiesg:+t.esgBought||0};
 }
 
 // ── API ──
@@ -253,10 +250,25 @@ async function loadProfile(profile){
   render();
 }
 function safeParse(s){try{return JSON.parse(s)}catch{return {}}}
-function coerceTax(o){const out={...o};["income","wht","ss","pvd","parents","children","children2nd",
-  "parentsHealth","lifeInsurance","healthInsurance","pension","ssf","homeLoan","donation",
-  "rmfHistorical","esgHistorical"].forEach(k=>out[k]=+out[k]||0); out.spouse=+out.spouse?1:0; return out;}
+function coerceTax(o){
+  const out={...o};
+  // migration: เลขเก่า = "ซื้อปีนี้ครึ่งแรก" → ย้ายเข้า bought
+  if(out.rmfBought===undefined && out.rmfHistorical!==undefined) out.rmfBought=out.rmfHistorical;
+  if(out.esgBought===undefined && out.esgHistorical!==undefined) out.esgBought=out.esgHistorical;
+  ["income","wht","ss","pvd","parents","children","children2nd","parentsHealth",
+   "lifeInsurance","healthInsurance","pension","ssf","homeLoan","donation",
+   "rmfBought","esgBought"].forEach(k=>out[k]=+out[k]||0);
+  out.spouse=+out.spouse?1:0;
+  return out;
+}
 
+async function syncSeedPlans(){
+  const seedMap=Object.fromEntries((SEED[STATE.profile]?.assets||[]).map(a=>[a.id,a.plan]));
+  STATE.assets=STATE.assets.map(a=>({...a,plan:seedMap[a.id]??a.plan}));
+  render();
+  try{await apiSave("assets",STATE.profile,STATE.assets);toast("อัปเดตแผน DCA แล้ว ✓");}
+  catch(e){toast("บันทึกไม่ได้: "+e.message,"var(--red)");}
+}
 function loadSeed(){
   const s=SEED[STATE.profile];
   STATE.assets=s.assets.map(a=>({...a}));
@@ -386,7 +398,7 @@ function tabDCA(m){
   const cls={}; STATE.assets.forEach(a=>{if(+a.plan>0)cls[a.asset_class]=(cls[a.asset_class]||0)+(+a.plan);});
   let h=`<div class="card" style="text-align:center;padding:22px"><div class="muted" style="font-size:11px;letter-spacing:2px">เงินลงทุนรายเดือน</div>
     <div class="gold tnum" style="font-size:30px;font-weight:700;margin:4px 0">${baht(tp)}</div></div>`;
-  h+=`<div class="card"><div class="ctitle">รายกองที่ตัดทุกเดือน</div>`;
+  h+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="ctitle" style="margin:0">รายกองที่ตัดทุกเดือน</div><button class="btn" style="font-size:12px;padding:6px 14px" onclick="syncSeedPlans()">อัปเดตแผนจาก seed</button></div>`;
   planned.forEach(a=>{h+=`<div class="arow"><div><div style="font-size:14px">${a.name}</div><div style="font-size:11px;color:${CLASSES[a.asset_class].color}">${CLASSES[a.asset_class].label}</div></div><span class="gold tnum" style="font-weight:600">${baht(a.plan)}<span class="muted" style="font-size:11px">/ด.</span></span></div>`;});
   h+=`</div><div class="card"><div class="ctitle">เงินใหม่เข้า Asset Class</div>`;
   CK.filter(k=>cls[k]).forEach(k=>{h+=`<div class="brow"><span><span class="dot" style="background:${CLASSES[k].color}"></span><span style="font-size:14px">${CLASSES[k].label}</span></span><span class="tnum" style="font-weight:600">${baht(cls[k])}<span class="muted" style="font-size:11px"> · ${(cls[k]/tp*100).toFixed(0)}%</span></span></div>`;});
@@ -413,7 +425,7 @@ function tabTax(m){
     <div class="muted" style="font-size:12px">WHT ${baht(r.wht)} − ภาษี ${baht(r.taxPayable)}</div></div>`;
   // ── Tax Action Dashboard ──
   const bi=bracketInfo(r.net, r.marginal);
-  const rmfThisYear=dt._rmfMonthly*dt._done, esgThisYear=dt._esgMonthly*dt._done;
+  const rmfThisYear=dt.rmf, esgThisYear=dt.thaiesg;
   h+=`<div class="card"><div class="ctitle">📋 สิ่งที่ควรทำตอนนี้</div>`;
   // ลดขั้นภาษี
   if(!bi.atBottom && bi.need>0){
@@ -450,21 +462,15 @@ function tabTax(m){
   if(ao.family)h+=taxBool("spouse","คู่สมรสไม่มีรายได้")+taxRow("parents","บิดามารดา (คน)")+taxRow("children","บุตรคนแรก (คน)")+taxRow("children2nd","บุตรคนที่ 2+ (คน)")+taxRow("parentsHealth","ประกันสุขภาพพ่อแม่")+taxRow("ss","ประกันสังคม")+taxRow("homeLoan","ดอกเบี้ยบ้าน")+taxRow("donation","เงินบริจาค");
   h+=accHead("insurance","2. ประกัน",r.ins>0?baht(r.ins):"");
   if(ao.insurance)h+=`<div class="alert" style="border-left-color:var(--line);margin:8px 0"><span class="muted" style="font-size:11px">สุขภาพ ≤25k · รวมชีวิต ≤100k</span></div>`+taxRow("lifeInsurance","ประกันชีวิต")+taxRow("healthInsurance","ประกันสุขภาพตัวเอง");
-  h+=accHead("funds","3. กองทุนเพื่อการออม",`${baht(dt.retSum||((+dt.rmf||0)+(+dt.pvd||0)))} / 500k`);
+  h+=accHead("funds","3. กองทุนเพื่อการออม",`${baht(r.retSum)} / 500k`);
   if(ao.funds){
     h+=`<div class="alert" style="border-left-color:var(--line);margin:8px 0"><span class="muted" style="font-size:11px">กลุ่มเกษียณ (RMF+PVD+SSF+บำนาญ) รวม ≤500k</span></div>`;
-    // RMF — AUTO (ประวัติ + ปีนี้จาก DCA)
-    h+=`<div class="arow" style="align-items:flex-start"><div style="flex:1"><div style="font-size:14px">RMF <span style="font-size:9px;background:rgba(77,208,199,.15);color:var(--tech);border-radius:4px;padding:1px 7px">AUTO</span></div><div class="muted" style="font-size:10px;margin-top:2px">ปีก่อนๆ ${baht(dt.rmfHistorical)} + ปีนี้ ${dt._done} ด.×${baht(dt._rmfMonthly)} = ${baht(dt._rmfMonthly*dt._done)}</div></div>
-      <div style="text-align:right"><div class="gold tnum" style="font-weight:700">${baht(dt.rmf)}</div><div style="display:flex;align-items:center;gap:4px;margin-top:4px"><span class="muted" style="font-size:10px">ปีก่อนๆ:</span><input class="num" type="text" inputmode="numeric" value="${dt.rmfHistorical}" oninput="setTax('rmfHistorical',this.value)" style="width:84px;padding:3px 6px;font-size:12px"></div></div></div>`;
-    // PVD — กรอกได้ (ข้อ4)
+    h+=taxRow("rmfBought","RMF ปีนี้");
     h+=taxRow("pvd","PVD (เงินสะสมปีนี้)");
-    // SSF — แสดงประวัติเฉยๆ ซื้อเพิ่มไม่ได้แล้ว (ข้อ5)
     h+=`<div class="arow"><div style="flex:1"><div style="font-size:14px;color:var(--mute)">SSF <span style="font-size:9px;background:rgba(138,153,181,.15);color:var(--mute);border-radius:4px;padding:1px 7px">🔒 สิ้นสิทธิ์</span></div><div class="muted" style="font-size:10px">ซื้อเพิ่มไม่ได้แล้ว (สิทธิ์ SSF หมดปี 2567)</div></div><span class="muted tnum">${baht(STATE.tax.ssf||0)}</span></div>`;
     h+=taxRow("pension","ประกันบำนาญ");
     h+=`<div style="border-top:1px solid var(--line);margin:8px 0"></div>`;
-    // ThaiESG — AUTO
-    h+=`<div class="arow" style="align-items:flex-start"><div style="flex:1"><div style="font-size:14px">ThaiESG <span style="font-size:9px;background:rgba(77,208,199,.15);color:var(--tech);border-radius:4px;padding:1px 7px">AUTO</span></div><div class="muted" style="font-size:10px;margin-top:2px">ปีก่อนๆ ${baht(dt.esgHistorical)} + ปีนี้ ${dt._done} ด.×${baht(dt._esgMonthly)} = ${baht(dt._esgMonthly*dt._done)}</div></div>
-      <div style="text-align:right"><div class="gold tnum" style="font-weight:700">${baht(dt.thaiesg)}</div><div style="display:flex;align-items:center;gap:4px;margin-top:4px"><span class="muted" style="font-size:10px">ปีก่อนๆ:</span><input class="num" type="text" inputmode="numeric" value="${dt.esgHistorical}" oninput="setTax('esgHistorical',this.value)" style="width:84px;padding:3px 6px;font-size:12px"></div></div></div>`;
+    h+=taxRow("esgBought","ThaiESG ปีนี้");
   }
   h+=`<div style="margin-top:14px;display:flex;gap:8px"><button class="btn" onclick="recomputeTax()" style="flex:1">คำนวณใหม่</button><button class="btn" onclick="saveTax()" style="flex:1">บันทึกภาษี</button></div></div>`;
   // advisor
@@ -477,6 +483,25 @@ function tabTax(m){
   });
   h+=`<div class="alert" style="margin-top:12px"><span class="gold" style="font-weight:700;margin-right:8px">›</span><span style="font-size:12px;line-height:1.6"><b class="gold">แนะนำ:</b> เติม ThaiESG ก่อน ${baht(r.esgRoom)} (ล็อค 5 ปี) ประหยัด ~${baht(Math.round(r.esgRoom*r.marginal))} · แล้วค่อย RMF</span></div></div>`;
   m.innerHTML=h;
+}
+function deductBlock(label,color,portVal,boughtKey,boughtVal,future,monthly){
+const futureAmt=monthly*future, totalD=boughtVal+futureAmt;
+return `<div style="background:#0B1322;border-radius:10px;padding:14px;margin:10px 0">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+<span style="color:${color};font-weight:700;font-size:15px">${label}</span>
+<span style="font-size:10px;background:rgba(77,208,199,.12);color:var(--tech);border-radius:4px;padding:2px 8px">ปีภาษี 2569</span></div>
+<div style="display:flex;justify-content:space-between;padding:6px 0">
+<span class="muted" style="font-size:12px">มูลค่าพอร์ตรวม</span>
+<span class="tnum muted" style="font-size:13px">${baht(portVal)}</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
+<span style="font-size:12px">ซื้อแล้วปีนี้ (YTD)</span>
+<input class="num" type="text" inputmode="numeric" value="${boughtVal}" oninput="setTax('${boughtKey}',this.value)" style="width:110px;padding:5px 8px;font-size:13px"></div>
+<div style="display:flex;justify-content:space-between;padding:6px 0">
+<span class="muted" style="font-size:12px">แผน DCA ที่เหลือ</span>
+<span class="tnum muted" style="font-size:13px">${future} เดือน × ${baht(monthly)} = ${baht(futureAmt)}</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);margin-top:6px;padding-top:10px">
+<span style="font-size:13px;font-weight:600">รวมลดหย่อนปีนี้</span>
+<span class="gold tnum" style="font-size:18px;font-weight:700">${baht(totalD)}</span></div></div>`;
 }
 function taxRow(k,label,ro){const v=STATE.tax[k]??0;return `<div class="arow"><div style="flex:1"><div style="font-size:14px">${label}</div></div>${ro?`<span class="gold tnum" style="font-weight:600">${baht(v)}</span>`:`<input class="num" type="text" inputmode="numeric" value="${v}" oninput="setTax('${k}',this.value)">`}</div>`;}
 function taxBool(k,label){const on=+STATE.tax[k]?1:0;return `<div class="arow"><div style="font-size:14px">${label}</div><button onclick="toggleTaxBool('${k}')" style="background:${on?'var(--gold)':'var(--line)'};color:${on?'var(--ink)':'var(--mute)'};border:none;border-radius:20px;padding:6px 18px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${on?'มี ✓':'ไม่มี'}</button></div>`;}
