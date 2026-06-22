@@ -1,4 +1,4 @@
-const CACHE = 'wealth-ledger-v1';
+const CACHE = 'wealth-ledger-v2';
 // Cache เฉพาะไฟล์ static ที่ไม่เปลี่ยน — HTML ไม่รวม
 const STATIC = ['/manifest.json', '/icon.svg'];
 
@@ -23,10 +23,16 @@ self.addEventListener('fetch', e => {
 
   const url = new URL(e.request.url);
 
-  // HTML → network-first เสมอ (ได้เวอร์ชันล่าสุด)
+  // HTML + logic.js → network-first เสมอ (ลอจิกภาษีต้องสดเสมอตอน deploy)
   if (url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.endsWith('/')) {
     e.respondWith(
       fetch(e.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+  if (url.pathname.endsWith('/lib/logic.js')) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
     );
     return;
   }

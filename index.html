@@ -182,9 +182,6 @@
   body.light .ctitle{color:#6B7A99;letter-spacing:1.2px;font-weight:600}
   body.light h1{color:var(--text)}
 
-  /* ── theme toggle ── */
-  body.light .tog-track{background:#1D6FD8}
-
   /* ── thermometer bar ── */
   body.light .thermo-bar{background:#DDE3EF}
 
@@ -264,6 +261,8 @@
   <div class="center"><span class="spin"></span><span class="muted" style="letter-spacing:3px;font-size:12px">กำลังโหลด…</span></div>
 </div>
 
+<!-- pure logic (single source of truth) — โหลดก่อน main script -->
+<script src="lib/logic.js"></script>
 <script>
 // ╔══════════════════════════════════════════════════╗
 // ║  CONFIG — แปะ URL ของ Apps Script ตรงนี้          ║
@@ -365,103 +364,8 @@ const SEED = {
 // ── State ──
 let STATE = { profile:"fern", assets:[], tax:{}, snapshots:[], tab:"overview", editing:false, accOpen:{}, _addForm:null, _dcaAddForm:null };
 
-const baht = n => "฿"+Math.round(+n||0).toLocaleString("th-TH");
-const num = v => { const c=String(v).replace(/[^0-9.]/g,""); return c===""?0:parseFloat(c)||0; };
 const $ = (sel,el=document)=>el.querySelector(sel);
-
-// ── จำนวนงวด DCA ที่เหลือในปีนี้ (งวดถัดไป → ธ.ค.) ตัดวันที่ 5 ──
-function remainingMonths(dcaDay=5){
-  const d=new Date(), mo=d.getMonth()+1, day=d.getDate();
-  let next = day < dcaDay ? mo : mo+1;   // ถ้ายังไม่ถึงวันตัด งวดเดือนนี้ยังนับ
-  if(next>12) return 0;
-  return 12 - next + 1;                  // งวด next..ธ.ค.
-}
-
-// ╔═══ Tax Engine 2569 ═══╗
-// คำนวณว่าต้องลดหย่อนเพิ่มเท่าไรเพื่อลดขั้นภาษี + ประหยัดเท่าไร
-function bracketInfo(net, marginal){
-  const EDGES=[150000,300000,500000,750000,1000000,2000000,5000000];
-  const RATES=[0,.05,.10,.15,.20,.25,.30,.35];
-  // หาขอบล่างของขั้นปัจจุบัน
-  let lower=0;
-  for(const e of EDGES){ if(net>e) lower=e; else break; }
-  const need=net-lower; // ลดหย่อนเท่านี้ → ตกไปขั้นล่าง
-  // อัตราขั้นล่างถัดไป
-  const idx=EDGES.indexOf(lower);
-  const lowerRate=idx>=0?RATES[idx]:0;
-  const saving=Math.round(need*marginal); // ประหยัดจากส่วนที่ตกขั้น
-  return {need:Math.max(need,0), curRate:marginal, lowerRate, saving, atBottom:net<=150000};
-}
-
-function calcTax(s){
-  const inc=+s.income||0;
-
-  // ── PVD Splitting (2569) ──
-  // ส่วนที่ 1: ≤10,000 → เข้ากลุ่มเกษียณ (ไม่เกิน 500k)
-  // ส่วนที่ 2: เกิน 10,000 (≤15%รายได้, ≤490,000) → ยกเว้นรายได้ก่อนคิดค่าใช้จ่าย
-  const pvdRaw=+s.pvd||0;
-  const pvdBase=Math.min(pvdRaw,10000);
-  const pvdExempt=Math.min(Math.max(pvdRaw-10000,0), inc*0.15, 490000);
-
-  // ── Effective income หลังยกเว้น PVD ──
-  const effInc=Math.max(inc-pvdExempt,0);
-  const exp=Math.min(effInc*0.5,100000);
-
-  // ── ครอบครัว + allowances ใหม่ ──
-  const fam=60000+(s.spouse?60000:0)+Math.min(+s.parents||0,4)*30000
-    +(+s.children||0)*30000+(+s.children2nd||0)*60000
-    +Math.min(+s.parentsHealth||0,15000)+(+s.ss||0)
-    +Math.min(+s.maternity||0,60000)           // คลอดบุตร ≤60k
-    +(+s.disabledCare||0)*60000;               // ดูแลผู้พิการ 60k/คน
-
-  // ── ประกัน + Pension Spillover ──
-  const hlth=Math.min(+s.healthInsurance||0,25000);
-  const lifeAmt=+s.lifeInsurance||0;
-  const rawIns=lifeAmt+hlth;
-  const insGap=Math.max(100000-rawIns,0);           // ช่องว่างใน quota ประกันชีวิต
-  const pensionRaw=+s.pension||0;
-  const pensionForIns=Math.min(pensionRaw,insGap);  // บำนาญเติมช่องว่างประกันก่อน
-  const ins=Math.min(rawIns+pensionForIns,100000);
-
-  // ── บำนาญส่วนที่เหลือ → quota บำนาญ 200k ──
-  const pensionRest=Math.max(pensionRaw-pensionForIns,0);
-  const pen=Math.min(pensionRest,inc*0.15,200000);
-
-  // ── กองทุน ──
-  const rmf=Math.min(+s.rmf||0,inc*0.30,500000);
-  const ssf=Math.min(+s.ssf||0,inc*0.30,200000);
-  const retSum=rmf+pvdBase+ssf+pen;
-  const ret=Math.min(retSum,500000);
-  const esg=Math.min(+s.thaiesg||0,inc*0.30,300000);
-  const home=Math.min(+s.homeLoan||0,100000);
-
-  // ── Easy E-Receipt (ช้อปดีมีคืน) ≤50k ──
-  const easyReceipt=Math.min(+s.easyReceipt||0,50000);
-
-  // ── รวมลดหย่อนก่อนบริจาค ──
-  const sumD=exp+fam+ins+ret+esg+home+easyReceipt;
-  const netBD=Math.max(effInc-sumD,0);
-
-  // ── 2x e-Donation ≤10% netBD ──
-  const eDonAmt=+s.eDonation||0;
-  const eDonDeduct=Math.min(eDonAmt*2, netBD*0.10);
-  const netAfterEDon=Math.max(netBD-eDonDeduct,0);
-
-  // ── 1x บริจาคทั่วไป ≤10% netAfterEDon ──
-  const don=Math.min(+s.donation||0, netAfterEDon*0.10);
-  const net=Math.max(netAfterEDon-don,0);
-
-  const B=[[150000,0],[150000,.05],[200000,.10],[250000,.15],[250000,.20],[1000000,.25],[3000000,.30],[Infinity,.35]];
-  let tax=0,rem=net,mg=0;
-  for(const[b,r]of B){if(rem<=0)break;const c=Math.min(rem,b);tax+=c*r;rem-=c;if(c>0)mg=r;}
-  const wht=+s.wht||0, tp=Math.round(tax);
-  return {exp,fam,ins,ret,esg,home,don,eDonDeduct,easyReceipt,retSum,pvdExempt,pvdBase,
-    effInc,net,taxPayable:tp,wht,refund:Math.round(wht-tp),marginal:mg,
-    allowedRMF:rmf,
-    rmfRoom:Math.max(Math.min(inc*0.30,500000-pvdBase-ssf-pen)-(+s.rmf||0),0),
-    esgRoom:Math.max(Math.min(inc*0.30,300000)-esg,0),
-    retireRoom:Math.max(500000-retSum,0)};
-}
+// num, baht, remainingMonths, bracketInfo, calcTax → lib/logic.js
 
 function derivedTax(){
   const t=STATE.tax;
@@ -507,18 +411,7 @@ async function loadProfile(profile){
   }
   render();
 }
-function safeParse(s){try{return JSON.parse(s)}catch{return {}}}
-function coerceTax(o){
-  const out={...o};
-  // migration: เลขเก่า = "ซื้อปีนี้ครึ่งแรก" → ย้ายเข้า bought
-  if(out.rmfBought===undefined && out.rmfHistorical!==undefined) out.rmfBought=out.rmfHistorical;
-  if(out.esgBought===undefined && out.esgHistorical!==undefined) out.esgBought=out.esgHistorical;
-  ["income","wht","ss","pvd","parents","children","children2nd","parentsHealth",
-   "lifeInsurance","healthInsurance","pension","ssf","homeLoan","donation",
-   "rmfBought","esgBought","easyReceipt","eDonation","maternity","disabledCare"].forEach(k=>out[k]=+out[k]||0);
-  out.spouse=+out.spouse?1:0;
-  return out;
-}
+// safeParse, coerceTax → lib/logic.js
 
 async function syncSeedPlans(){
   const snap=snapState();
@@ -538,9 +431,9 @@ function loadSeed(){
 }
 
 // ── computed ──
-function total(){return STATE.assets.reduce((s,a)=>s+(+a.value||0),0);}
-function byClass(){const m={};CK.forEach(k=>m[k]=0);STATE.assets.forEach(a=>m[a.asset_class]=(m[a.asset_class]||0)+(+a.value||0));return m;}
-function byBucket(){const m={};STATE.assets.forEach(a=>m[a.bucket]=(m[a.bucket]||0)+(+a.value||0));return m;}
+function total(){return sumValues(STATE.assets);}
+function byClass(){return groupByClass(STATE.assets,CK);}
+function byBucket(){return groupByBucket(STATE.assets);}
 function buckets(){return [...new Set(STATE.assets.map(a=>a.bucket))];}
 
 function alerts(){
@@ -891,7 +784,7 @@ function tabUpdate(m){
 
   h+=`<div class="mini-card" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
     <span class="muted" style="font-size:13px">รวมทั้งหมด</span>
-    <span class="gold tnum" style="font-size:22px;font-weight:700">${baht(t)}</span>
+    <span id="update-total" class="gold tnum" style="font-size:22px;font-weight:700">${baht(t)}</span>
   </div>`;
   m.innerHTML=h;
 }
@@ -1088,7 +981,7 @@ function buildBracketThermoHtml(r, bi){
   const EDGES=[150000,300000,500000,750000,1000000,2000000,5000000];
   let lower=0;
   for(const e of EDGES){if(r.net>e)lower=e;else break;}
-  const upper=EDGES[EDGES.indexOf(lower)+1]||5000000;
+  const upper=EDGES[EDGES.indexOf(lower)+1]??10000000;
   const pct=Math.min((r.net-lower)/(upper-lower)*100,100);
   const danger=pct>70, close=bi.need<(upper-lower)*0.2;
   const fillColor=danger?'linear-gradient(90deg,var(--green),var(--red))':'linear-gradient(90deg,var(--green),var(--gold))';
@@ -1364,7 +1257,7 @@ function tabTax(m){
     </div>
     <div style="padding:12px 0;border-top:1px solid var(--line)">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <div><span style="color:#5B8DEF;font-weight:700;font-size:15px">RMF</span><span class="muted" style="font-size:10px;margin-left:8px">ล็อค 22 ปี</span></div>
+        <div><span style="color:#5B8DEF;font-weight:700;font-size:15px">RMF</span><span class="muted" style="font-size:10px;margin-left:8px">ล็อคถึงอายุ 55 ปี</span></div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:4px">
         <span class="muted" style="font-size:11px">ซื้อได้อีก</span><span id="tlv-alpha-rmf-room" class="tnum" style="font-size:13px">${baht(r.rmfRoom)}</span>
@@ -1378,7 +1271,7 @@ function tabTax(m){
 
   // ── DCA Projection (dynamic) ──
   // คำนวณจากยอด YTD จริง + DCA ที่เหลือในปี → รัน calcTax อีกรอบด้วยตัวเลขคาดการณ์
-  const rmfMonthly=STATE.assets.filter(a=>/rmf/i.test(a.name)||a.bucket==="RMF").reduce((s,a)=>s+(+a.plan||0),0);
+  const rmfMonthly=STATE.assets.filter(a=>/rmf/i.test(a.name)||/rmf/i.test(a.bucket)).reduce((s,a)=>s+(+a.plan||0),0);
   const esgMonthly=STATE.assets.filter(a=>/esg/i.test(a.name)||a.bucket==="ThaiESG").reduce((s,a)=>s+(+a.plan||0),0);
   const mLeft=remainingMonths();
   const hasDca=rmfMonthly>0||esgMonthly>0;
@@ -1531,10 +1424,12 @@ async function deleteSnapshot(month){
 }
 
 // ── handlers ──
-function switchProfile(p){if(p!==STATE.profile){STATE.editing=false;STATE._error=null;STATE._addForm=null;loadProfile(p);}}
+function switchProfile(p){if(p!==STATE.profile){STATE.editing=false;STATE._error=null;STATE._addForm=null;STATE._dcaAddForm=null;loadProfile(p);}}
 function go(t){
-  if(STATE.editing && t!==STATE.tab){
+  if(STATE.editing && STATE._dirty && t!==STATE.tab){
     if(!confirm("มีการแก้ไขที่ยังไม่บันทึก ออกไปแท็บอื่นจะเสียข้อมูล ยืนยันไหม?")) return;
+    STATE.editing=false;
+  } else if(STATE.editing && t!==STATE.tab){
     STATE.editing=false;
   }
   STATE.tab=t;
@@ -1548,10 +1443,11 @@ function toggleTheme(){
   document.body.classList.toggle('light');
   localStorage.setItem('theme', document.body.classList.contains('light')?'light':'dark');
 }
-function toggleEdit(){STATE.editing=true;render();}
-function setVal(id,v){const a=STATE.assets.find(x=>x.id===id);if(a)a.value=num(v);
-  const tot=document.querySelector("header .total");if(tot)tot.textContent=baht(total());
-  const tot2=$(".gold.tnum");if(tot2)tot2.textContent=baht(total());}
+function toggleEdit(){STATE.editing=true;STATE._dirty=false;render();}
+function setVal(id,v){const a=STATE.assets.find(x=>x.id===id);if(a){a.value=num(v);STATE._dirty=true;}
+  const t=total();
+  const tot=document.querySelector("header .total");if(tot)tot.textContent=baht(t);
+  const tot2=document.getElementById("update-total");if(tot2)tot2.textContent=baht(t);}
 let _taxTimer=null;
 function setTax(k,v){ _applyTaxChange(k,num(v)); }
 function recomputeTax(){renderTab();} // กดปุ่มเพื่อคำนวณใหม่
@@ -1570,6 +1466,7 @@ async function saveAll(){
   const btn=document.querySelector('[onclick="saveAll()"]');
   btnLoading(btn,true);
   STATE.editing=false;
+  STATE._dirty=false;
   try{
     await apiSave("assets",STATE.profile,STATE.assets);
     const mk=()=>{const d=new Date();const th=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];return th[d.getMonth()]+" "+((d.getFullYear()+543)%100);};

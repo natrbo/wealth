@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unit Tests — wealth logic</title>
+<style>
+  :root{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  body{margin:0;background:#0e1117;color:#d6dae0;padding:18px;line-height:1.5}
+  h1{font-size:18px;margin:0 0 4px}
+  #summary{font-size:15px;font-weight:700;margin:10px 0;padding:10px 14px;border-radius:8px}
+  .ok{background:#0f2e1a;color:#5fd38e;border:1px solid #1f6b3e}
+  .bad{background:#3a1414;color:#ff8080;border:1px solid #7a2727}
+  .group{margin:14px 0 4px;font-size:13px;color:#8aa0b8;text-transform:uppercase;letter-spacing:1px}
+  .case{padding:3px 0 3px 22px;font-size:13px;position:relative}
+  .case.pass::before{content:"✓";position:absolute;left:2px;color:#5fd38e}
+  .case.fail::before{content:"✗";position:absolute;left:2px;color:#ff8080}
+  .case.fail{color:#ff9b9b}
+  .detail{color:#7d8a99;font-size:12px;padding-left:22px}
+</style>
+</head>
+<body>
+<h1>Unit Tests — <code>lib/logic.js</code></h1>
+<div id="summary">กำลังรัน…</div>
+<div id="out"></div>
+
+<!-- โหลดลอจิกชุดเดียวกับที่ index.html ใช้จริง -->
+<script src="lib/logic.js"></script>
+<script>
+(function(){
+  const L = window.WealthLogic;
+  const out = document.getElementById("out");
+  let pass = 0, fail = 0; const failures = [];
+
+  function group(name){ const d=document.createElement("div"); d.className="group"; d.textContent=name; out.appendChild(d); }
+  function record(name, ok, detail){
+    const d=document.createElement("div"); d.className="case "+(ok?"pass":"fail"); d.textContent=name; out.appendChild(d);
+    if(!ok){ const e=document.createElement("div"); e.className="detail"; e.textContent=detail; out.appendChild(e); failures.push(name+" — "+detail); fail++; }
+    else pass++;
+  }
+  // strict deep-equal for numbers/objects, with float tolerance
+  function eqVal(a,b){
+    if(typeof a==="number" && typeof b==="number"){ if(!isFinite(a)||!isFinite(b)) return a===b; return Math.abs(a-b) < 1e-6; }
+    return a===b;
+  }
+  function deepEq(a,b){
+    if(eqVal(a,b)) return true;
+    if(a&&b&&typeof a==="object"&&typeof b==="object"){
+      const ka=Object.keys(a), kb=Object.keys(b);
+      if(ka.length!==kb.length) return false;
+      return ka.every(k=>deepEq(a[k],b[k]));
+    }
+    return false;
+  }
+  function show(v){ return typeof v==="object"?JSON.stringify(v):String(v); }
+
+  function eq(name, actual, expected){ record(name, deepEq(actual,expected), `got ${show(actual)} · want ${show(expected)}`); }
+  // assert a subset of object fields match (focused checks on big results)
+  function eqFields(name, actual, expectedSubset){
+    let ok=true, diff=[];
+    for(const k in expectedSubset){ if(!eqVal(actual[k], expectedSubset[k])){ ok=false; diff.push(`${k}: got ${actual[k]} want ${expectedSubset[k]}`); } }
+    record(name, ok, diff.join(" · "));
+  }
+
+  // ═══════════════════════════ num ═══════════════════════════
+  group("num — parse ตัวเลขจาก string");
+  eq("comma + ทศนิยม", L.num("1,234.56"), 1234.56);
+  eq("มีสัญลักษณ์ ฿", L.num("฿1,000"), 1000);
+  eq("string ว่าง → 0", L.num(""), 0);
+  eq("ตัวอักษรล้วน → 0", L.num("abc"), 0);
+  eq("number ตรง ๆ", L.num(500), 500);
+  eq("จุดเกิน → parseFloat ตัวแรก", L.num("12.5.6"), 12.5);
+  eq("null → 0", L.num(null), 0);
+  eq("0", L.num("0"), 0);
+
+  // ═══════════════════════════ baht ═══════════════════════════
+  group("baht — format เงินบาท (ปัดเต็ม)");
+  eq("ปัดขึ้น", L.baht(1234.6), "฿"+(1235).toLocaleString("th-TH"));
+  eq("ศูนย์", L.baht(0), "฿0");
+  eq("ติดลบ", L.baht(-50), "฿"+(-50).toLocaleString("th-TH"));
+  eq("ค่าพัง → ฿0", L.baht("x"), "฿0");
+  eq("หลักพันมี comma", L.baht(1000000), "฿"+(1000000).toLocaleString("th-TH"));
+
+  // ═══════════════════════════ remainingMonths ═══════════════════════════
+  group("remainingMonths — งวด DCA ที่เหลือ (ตัดวันที่ 5)");
+  const D=(y,m,d)=>new Date(y,m-1,d);
+  eq("1 ม.ค. ก่อนวันตัด → 12", L.remainingMonths(5, D(2026,1,1)), 12);
+  eq("10 ม.ค. หลังวันตัด → 11", L.remainingMonths(5, D(2026,1,10)), 11);
+  eq("22 มิ.ย. → 6", L.remainingMonths(5, D(2026,6,22)), 6);
+  eq("4 ธ.ค. ก่อนตัด → 1", L.remainingMonths(5, D(2026,12,4)), 1);
+  eq("10 ธ.ค. หลังตัด → 0", L.remainingMonths(5, D(2026,12,10)), 0);
+  eq("วันตัดเอง dcaDay=15, วันที่10 → นับเดือนนี้", L.remainingMonths(15, D(2026,6,10)), 7);
+
+  // ═══════════════════════════ bracketInfo ═══════════════════════════
+  group("bracketInfo — ระยะถึงขั้นภาษีล่าง");
+  eqFields("net 400k @10% → ตกขั้นที่ 300k", L.bracketInfo(400000,0.10), {need:100000, lowerRate:0.05, saving:10000, atBottom:false});
+  eqFields("net = 150k → atBottom", L.bracketInfo(150000,0), {need:150000, lowerRate:0, atBottom:true});
+  eqFields("net 100k → ใต้ขั้นแรก", L.bracketInfo(100000,0), {need:100000, lowerRate:0, atBottom:true});
+  eqFields("net 0 → need 0", L.bracketInfo(0,0), {need:0, atBottom:true});
+  eqFields("net 6M @35% → ตกขั้นที่ 5M", L.bracketInfo(6000000,0.35), {need:1000000, lowerRate:0.30, saving:350000, atBottom:false});
+
+  // ═══════════════════════════ calcTax ═══════════════════════════
+  group("calcTax — Tax Engine 2569");
+  // A: รายได้ล้วน ไม่มีลดหย่อน
+  eqFields("A) income 500k ล้วน", L.calcTax({income:500000}),
+    {effInc:500000, exp:100000, fam:60000, ins:0, net:340000, taxPayable:11500, marginal:0.10, refund:-11500,
+     retireRoom:500000, esgRoom:150000, rmfRoom:150000, allowedRMF:0});
+  // B: PVD splitting
+  eqFields("B) PVD 25k → base 10k + exempt 15k", L.calcTax({income:1000000, pvd:25000}),
+    {pvdBase:10000, pvdExempt:15000, effInc:985000, net:815000, taxPayable:78000, marginal:0.20, retireRoom:490000});
+  // C: retirement cap 500k + pension spillover เข้าประกัน
+  eqFields("C) ret cap 500k + pension→ins spillover", L.calcTax({income:2000000, rmf:500000, ssf:200000, pension:300000, pvd:20000, lifeInsurance:60000, healthInsurance:30000}),
+    {ins:100000, ret:500000, retSum:910000, retireRoom:0, net:1230000, taxPayable:172500, marginal:0.25,
+     pensionForIns:15000, pen:200000});
+  // D: 2x e-donation ก่อน, แล้ว donation ทั่วไป
+  eqFields("D) e-donation 2x (cap 10% netBD) แล้ว donation", L.calcTax({income:500000, eDonation:20000, donation:50000}),
+    {eDonDeduct:34000, don:30600, net:275400, taxPayable:6270, marginal:0.05});
+  // E: refund เมื่อ wht > tax
+  eqFields("E) wht 20k > tax → refund", L.calcTax({income:500000, wht:20000}),
+    {taxPayable:11500, wht:20000, refund:8500});
+  // F: allowances ครอบครัว + cap ต่าง ๆ
+  eqFields("F) family allowances + caps", L.calcTax({income:1000000, spouse:1, parents:5, children:2, children2nd:1, parentsHealth:20000, ss:9000, maternity:80000, disabledCare:2}),
+    {fam:564000});
+  // G: เพดาน 30% รายได้ สำหรับ rmf/ssf/esg
+  eqFields("G) rmf/ssf/esg ติดเพดาน 30% รายได้", L.calcTax({income:100000, rmf:50000, ssf:50000, thaiesg:50000}),
+    {allowedRMF:30000, esgRoom:0, rmfRoom:0});
+  // H: input ว่าง → ไม่พัง, ทุกค่า 0
+  eqFields("H) ออบเจ็กต์ว่าง → ปลอดภัย", L.calcTax({}),
+    {effInc:0, net:0, taxPayable:0, marginal:0, fam:60000});
+
+  // ═══════════════════════════ coerceTax ═══════════════════════════
+  group("coerceTax — แปลงข้อมูลจาก Sheet");
+  (function(){
+    const r=L.coerceTax({income:"500000", spouse:"yes", ss:"10500"});
+    eqFields("string number → number, spouse ที่ไม่ใช่เลข → 0", r, {income:500000, ss:10500, spouse:0});
+  })();
+  eqFields("spouse '1' → 1", L.coerceTax({spouse:"1"}), {spouse:1});
+  eqFields("field หาย → 0", L.coerceTax({}), {income:0, rmfBought:0, esgBought:0});
+  eqFields("migrate rmfHistorical → rmfBought", L.coerceTax({rmfHistorical:5000, esgHistorical:3000}), {rmfBought:5000, esgBought:3000});
+  eqFields("rmfBought เดิมชนะ historical", L.coerceTax({rmfBought:100, rmfHistorical:999}), {rmfBought:100});
+
+  // ═══════════════════════════ safeParse ═══════════════════════════
+  group("safeParse — JSON parse ไม่ throw");
+  eq("object ปกติ", L.safeParse('{"a":1}'), {a:1});
+  eq("array", L.safeParse('[1,2]'), [1,2]);
+  eq("JSON พัง → {}", L.safeParse('not json'), {});
+
+  // ═══════════════════════════ aggregations ═══════════════════════════
+  group("sumValues / groupByClass / groupByBucket");
+  eq("sumValues รวม value (string/null ปลอดภัย)", L.sumValues([{value:100},{value:"50"},{value:null},{}]), 150);
+  eq("sumValues ลิสต์ว่าง → 0", L.sumValues([]), 0);
+  eq("groupByClass เติม key ครบ + รวมตาม class",
+     L.groupByClass([{asset_class:"gold",value:10},{asset_class:"gold",value:5},{asset_class:"fixed",value:3}], ["gold","fixed","reit"]),
+     {gold:15, fixed:3, reit:0});
+  eq("groupByBucket รวมตาม bucket",
+     L.groupByBucket([{bucket:"RMF",value:10},{bucket:"SSF",value:5},{bucket:"RMF",value:2}]),
+     {RMF:12, SSF:5});
+
+  // ═════════════════ DATA INTEGRITY & PRECISION ═════════════════
+  const ok = (name, cond, detail="") => record(name, !!cond, detail || "condition false");
+  const finite = (name, v) => record(name, Number.isFinite(v), `not finite: ${v}`);
+
+  group("Precision — float (เก็บค่าดิบ ปัดตอนแสดงผล)");
+  // 0.1 + 0.2 ≠ 0.3 เป๊ะ ในเลขทศนิยม float — ต้องอยู่ในเกณฑ์ยอมรับ และปัดถูกตอนแสดง
+  eq("sumValues(0.1, 0.2) ≈ 0.3", L.sumValues([{value:0.1},{value:0.2}]), 0.3);
+  ok("0.1+0.2 ไม่เท่ากับ 0.3 เป๊ะ (เหตุผลที่ปัดตอนแสดง)", L.sumValues([{value:0.1},{value:0.2}]) !== 0.3);
+  eq("สะสม 10×0.1 ≈ 1.0 (ไม่ดริฟต์)", L.sumValues(Array(10).fill({value:0.1})), 1.0);
+  eq("baht(10×0.1) → ฿1", L.baht(L.sumValues(Array(10).fill({value:0.1}))), "฿1");
+  (function(){
+    const A=[{value:377560.80},{value:226536.48},{value:25388.93},{value:21827.96},{value:6210.51}];
+    eq("รวมมูลค่าทศนิยม 2 ตำแหน่ง", L.sumValues(A), 657524.68);
+    eq("baht ปัดยอดรวม → ฿657,525", L.baht(L.sumValues(A)), "฿"+(657525).toLocaleString("th-TH"));
+  })();
+
+  group("Precision — ขอบขั้นภาษี & เพดาน (off-by-one-baht)");
+  eqFields("net = 150,000 เป๊ะ → ไม่มีภาษี", L.calcTax({income:310000}), {net:150000, taxPayable:0, marginal:0});
+  eqFields("net = 150,001 → ขยับขั้น 5% แต่ภาษีปัดเป็น 0", L.calcTax({income:310001}), {net:150001, taxPayable:0, marginal:0.05});
+  eqFields("net = 300,000 เป๊ะ → ยังขั้น 5%", L.calcTax({income:460000}), {net:300000, taxPayable:7500, marginal:0.05});
+  eqFields("net = 300,001 → ข้ามเป็นขั้น 10%", L.calcTax({income:460001}), {net:300001, taxPayable:7500, marginal:0.10});
+  eqFields("เพดาน rmf = 30% รายได้ ไม่ปัดทิ้งเศษ", L.calcTax({income:333333, rmf:200000}), {allowedRMF:99999.9, rmfRoom:0});
+  eqFields("pvd 10,000.50 → base 10,000 + exempt 0.50 (เก็บเศษสตางค์)", L.calcTax({income:2000000, pvd:10000.5}), {pvdBase:10000, pvdExempt:0.5});
+
+  group("Integrity — ไม่มี NaN / Infinity หลุดออก");
+  (function(){
+    const r=L.calcTax({income:333333, rmf:200000, pension:1000000, ssf:999999, thaiesg:888888, donation:50000, eDonation:20000, pvd:10000.5});
+    ["taxPayable","net","refund","marginal","ins","ret","retSum","pen","pensionForIns","esg","esgRoom","rmfRoom","retireRoom","fam","effInc"]
+      .forEach(k=>finite("calcTax."+k+" เป็นเลขจำกัด", r[k]));
+  })();
+  eq("baht(NaN) → ฿0 (ไม่โชว์ NaN)", L.baht(NaN), "฿0");
+  eq("num(NaN) → 0", L.num(NaN), 0);
+  eq("num(Infinity) → 0", L.num(Infinity), 0);
+  eq("num(-Infinity) → 0", L.num(-Infinity), 0);
+
+  group("Integrity — round-trip & invariants (conservation)");
+  (function(){
+    const x={income:"500000", spouse:"1", rmfHistorical:5000, ss:"10500", lifeInsurance:"4510.50"};
+    eq("coerceTax idempotent (รันซ้ำได้ผลเท่าเดิม)", L.coerceTax(L.coerceTax(x)), L.coerceTax(x));
+  })();
+  (function(){
+    const bd={gold:5.5, fixed:377560.8, thai_equity:226536.48};
+    eq("safeParse(JSON.stringify(breakdown)) = breakdown", L.safeParse(JSON.stringify(bd)), bd);
+  })();
+  (function(){
+    const A=[{asset_class:"gold",bucket:"RMF",value:5.5},{asset_class:"gold",bucket:"SSF",value:4.5},
+            {asset_class:"fixed",bucket:"RMF",value:377560.80},{asset_class:"thai_equity",bucket:"PVD",value:226536.48},
+            {asset_class:"reit",bucket:"SSF",value:0}];
+    const tot=L.sumValues(A);
+    const sumC=Object.values(L.groupByClass(A,["gold","fixed","thai_equity","reit","dm_core"])).reduce((s,v)=>s+v,0);
+    const sumB=Object.values(L.groupByBucket(A)).reduce((s,v)=>s+v,0);
+    ok("Σ byClass = total (เงินไม่หาย/ไม่งอก)", Math.abs(sumC-tot)<1e-6, `${sumC} vs ${tot}`);
+    ok("Σ byBucket = total (เงินไม่หาย/ไม่งอก)", Math.abs(sumB-tot)<1e-6, `${sumB} vs ${tot}`);
+  })();
+  (function(){
+    const A=[{asset_class:"crypto",value:100},{asset_class:"gold",value:50}];
+    const byC=L.groupByClass(A,["gold"]);
+    eq("class นอก keys ไม่ถูกทิ้ง", byC, {gold:50, crypto:100});
+    ok("ยอดรวมคงไว้แม้ class ไม่อยู่ใน keys", Object.values(byC).reduce((s,v)=>s+v,0)===L.sumValues(A));
+  })();
+  eqFields("refund = wht − tax เป็นจำนวนเต็มเป๊ะ", L.calcTax({income:500000, wht:11500}), {taxPayable:11500, refund:0});
+
+  // ═══════════════════════════ summary ═══════════════════════════
+  const total = pass + fail;
+  const sEl = document.getElementById("summary");
+  sEl.className = fail===0 ? "ok" : "bad";
+  sEl.textContent = `${fail===0?"PASS ✓":"FAIL ✗"}  —  ${pass}/${total} ผ่าน` + (fail?`  (${fail} ตก)`:"");
+  window.__results = { pass, fail, total, failures };
+  console.log("TEST_RESULTS", JSON.stringify(window.__results));
+})();
+</script>
+</body>
+</html>
