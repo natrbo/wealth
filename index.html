@@ -322,8 +322,11 @@ async function loadProfile(profile){
 
 async function syncSeedPlans(){
   const snap=snapState();
-  const seedMap=Object.fromEntries((SEED[STATE.profile]?.assets||[]).map(a=>[a.id,a.plan]));
+  const seedAssets=(SEED[STATE.profile]?.assets||[]);
+  const seedMap=Object.fromEntries(seedAssets.map(a=>[a.id,a.plan]));
+  const existingIds=new Set(STATE.assets.map(a=>a.id));
   STATE.assets=STATE.assets.map(a=>({...a,plan:seedMap[a.id]??a.plan}));
+  seedAssets.forEach(sa=>{ if(!existingIds.has(sa.id)) STATE.assets.push({...sa}); });
   render();
   try{await apiSave("assets",STATE.profile,STATE.assets);toast("อัปเดตแผน DCA แล้ว ✓");}
   catch(e){rollback(snap);toast("บันทึกไม่ได้ — ย้อนกลับแล้ว","var(--red)");}
