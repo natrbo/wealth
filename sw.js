@@ -1,4 +1,4 @@
-const CACHE = 'wealth-ledger-v2';
+const CACHE = 'wealth-ledger-v3';
 // Cache เฉพาะไฟล์ static ที่ไม่เปลี่ยน — HTML ไม่รวม
 const STATIC = ['/manifest.json', '/icon.svg'];
 
@@ -30,7 +30,7 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  if (url.pathname.endsWith('/lib/logic.js')) {
+  if (url.pathname.includes('/lib/')) {
     e.respondWith(
       fetch(e.request).catch(() => caches.match(e.request))
     );
