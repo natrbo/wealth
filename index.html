@@ -363,7 +363,7 @@ const SEED = {
 };
 
 // ── State ──
-let STATE = { profile:"fern", assets:[], tax:{}, snapshots:[], tab:"overview", editing:false, accOpen:{}, _addForm:null, _dcaAddForm:null };
+let STATE = { profile:"fern", assets:[], tax:{}, snapshots:[], tab:"overview", editing:false, accOpen:{}, _addForm:null, _dcaAddForm:null, _dcaMonths:12 };
 
 const $ = (sel,el=document)=>el.querySelector(sel);
 // num, baht, remainingMonths, bracketInfo, calcTax → lib/logic.js
@@ -797,6 +797,7 @@ function setPlan(id,v){
   if(a.plan>0) delete a._isEditingDca;
   const totalEl=document.getElementById('dca-monthly-total');
   if(totalEl) totalEl.textContent=baht(STATE.assets.reduce((s,x)=>s+(+x.plan||0),0));
+  renderDcaImpact();
   clearTimeout(setPlan._t);
   setPlan._t=setTimeout(async()=>{
     setPlan._t=null;
@@ -845,6 +846,118 @@ function removeDcaFund(id){
     catch(e){rollback(snap);toast("บันทึกไม่ได้ — ย้อนกลับแล้ว","var(--red)");}
   },400);
 }
+
+// ── DCA Impact simulation ──
+function setDcaMonths(mo){
+  STATE._dcaMonths=mo;
+  const sl=document.getElementById('dca-months-slider');
+  const lbl=document.getElementById('dca-months-label');
+  if(sl) sl.value=mo;
+  if(lbl) lbl.textContent=mo+' เดือน';
+  document.querySelectorAll('.dca-preset-btn').forEach(b=>{
+    const active=+b.dataset.mo===mo;
+    b.style.background=active?'linear-gradient(135deg,var(--gold2),var(--gold))':'var(--ink3)';
+    b.style.color=active?'var(--ink)':'var(--mute)';
+  });
+  renderDcaImpact();
+}
+
+function renderDcaImpact(){
+  const el=document.getElementById('dca-impact');
+  if(!el) return;
+  const months=STATE._dcaMonths||12;
+  const t=total();
+  const tp=STATE.assets.reduce((s,a)=>s+(+a.plan||0),0);
+
+  const curByClass={}, dcaByClass={};
+  CK.forEach(k=>{curByClass[k]=0; dcaByClass[k]=0;});
+  STATE.assets.forEach(a=>{
+    curByClass[a.asset_class]=(curByClass[a.asset_class]||0)+(+a.value||0);
+    if(+a.plan>0) dcaByClass[a.asset_class]=(dcaByClass[a.asset_class]||0)+(+a.plan||0);
+  });
+
+  const projByClass={};
+  CK.forEach(k=>projByClass[k]=(curByClass[k]||0)+(dcaByClass[k]||0)*months);
+  const projTotal=t+tp*months;
+
+  const activeKeys=CK.filter(k=>cls(k).target>0||curByClass[k]>0||dcaByClass[k]>0);
+
+  const mkBar=(byClass,tot)=>activeKeys.map(k=>{
+    const pct=tot?(byClass[k]||0)/tot*100:0;
+    return pct>0.05?`<div title="${cls(k).label}: ${pct.toFixed(1)}%" style="width:${pct.toFixed(2)}%;background:${cls(k).color};height:100%;transition:width .25s ease"></div>`:'';
+  }).join('');
+
+  const tgtBar=activeKeys.map(k=>{
+    const tgt=cls(k).target;
+    return tgt>0?`<div style="width:${tgt}%;background:${cls(k).color};opacity:.4;height:100%"></div>`:'';
+  }).join('');
+
+  const rows=activeKeys.map(k=>{
+    const c=cls(k);
+    const curPct=t?(curByClass[k]||0)/t*100:0;
+    const projPct=projTotal?(projByClass[k]||0)/projTotal*100:0;
+    const delta=projPct-curPct;
+    const dca=dcaByClass[k]||0;
+    const vsTarget=projPct-c.target;
+    return {k,c,curPct,projPct,delta,dca,vsTarget};
+  });
+
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:40px 1fr;gap:8px;align-items:center;margin-bottom:16px">
+      <span class="muted" style="font-size:9px;letter-spacing:.5px">ตอนนี้</span>
+      <div>
+        <div style="display:flex;height:12px;border-radius:5px;overflow:hidden;background:var(--ink3)">${mkBar(curByClass,t)}</div>
+        <div class="muted tnum" style="font-size:9px;text-align:right;margin-top:2px">${(t/1e6).toFixed(2)}M</div>
+      </div>
+      <span class="muted" style="font-size:9px;letter-spacing:.5px">+${months}ด.</span>
+      <div>
+        <div style="display:flex;height:12px;border-radius:5px;overflow:hidden;background:var(--ink3)">${mkBar(projByClass,projTotal)}</div>
+        <div style="font-size:9px;text-align:right;margin-top:2px;color:var(--green);font-variant-numeric:tabular-nums">${(projTotal/1e6).toFixed(2)}M <span class="muted">(+${baht(tp*months)})</span></div>
+      </div>
+      <span class="muted" style="font-size:9px;letter-spacing:.5px">เป้า</span>
+      <div style="display:flex;height:12px;border-radius:5px;overflow:hidden;background:var(--ink3)">${tgtBar}</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${activeKeys.filter(k=>dcaByClass[k]>0).map(k=>`
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px">
+          <span style="width:7px;height:7px;border-radius:2px;background:${cls(k).color};display:inline-block;flex-shrink:0"></span>
+          <span style="color:var(--mute)">${cls(k).label}</span>
+          <span class="gold tnum" style="font-weight:600">${baht(dcaByClass[k])}/ด.</span>
+        </div>`).join('<span style="color:var(--line)">·</span>')}
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr>
+        <th style="text-align:left;padding:4px 4px 4px 0;color:var(--mute);font-size:9px;font-weight:600;letter-spacing:.5px;border-bottom:1px solid var(--line)">ประเภท</th>
+        <th style="text-align:right;padding:4px 0;color:var(--mute);font-size:9px;font-weight:600;border-bottom:1px solid var(--line)">ตอนนี้</th>
+        <th style="text-align:right;padding:4px 0;color:var(--mute);font-size:9px;font-weight:600;border-bottom:1px solid var(--line)">+${months}ด.</th>
+        <th style="text-align:right;padding:4px 0;color:var(--mute);font-size:9px;font-weight:600;border-bottom:1px solid var(--line)">เปลี่ยน</th>
+        <th style="text-align:right;padding:4px 0;color:var(--mute);font-size:9px;font-weight:600;border-bottom:1px solid var(--line)">เป้า</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`
+          <tr>
+            <td style="padding:6px 4px 6px 0;border-top:1px solid var(--line)">
+              <div style="display:flex;align-items:center;gap:5px">
+                <span style="width:7px;height:7px;border-radius:2px;background:${r.c.color};flex-shrink:0;display:inline-block"></span>
+                <span style="font-size:10px;line-height:1.3">${r.c.label}</span>
+                ${r.dca>0?`<span class="gold tnum" style="font-size:9px;opacity:.8">+${baht(r.dca)}</span>`:''}
+              </div>
+            </td>
+            <td style="text-align:right;padding:6px 0;border-top:1px solid var(--line);color:var(--mute);font-variant-numeric:tabular-nums">${r.curPct.toFixed(1)}%</td>
+            <td style="text-align:right;padding:6px 0;border-top:1px solid var(--line);font-weight:700;font-variant-numeric:tabular-nums">${r.projPct.toFixed(1)}%</td>
+            <td style="text-align:right;padding:6px 0;border-top:1px solid var(--line);font-weight:700;font-variant-numeric:tabular-nums;font-size:12px;color:${r.delta>0.3?'var(--green)':r.delta<-0.3?'var(--red)':'var(--mute)'}">
+              ${r.delta>=0?'▲':'▼'}${Math.abs(r.delta).toFixed(1)}%
+            </td>
+            <td style="text-align:right;padding:6px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums;color:${Math.abs(r.vsTarget)<1?'var(--green)':r.vsTarget>3?'var(--red)':'var(--mute)'}">
+              ${r.c.target}%${Math.abs(r.vsTarget)<1?' ✓':r.vsTarget>3?' ▲':r.vsTarget<-3?' ▼':''}
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="muted" style="font-size:9px;margin-top:8px;line-height:1.5">* DCA สะสม ${months} เดือน · ไม่รวมผลตอบแทน / rebalance · สีเขียว = เพิ่มสัดส่วน · สีแดง = ลดสัดส่วน (dilute)</div>
+  `;
+}
+
 function tabDCA(m){
   const planned=STATE.assets.filter(a=>+a.plan>0||a._isEditingDca);
   const notPlanned=STATE.assets.filter(a=>!(+a.plan>0)&&!a._isEditingDca);
@@ -944,7 +1057,25 @@ function tabDCA(m){
       </div>
     </div>`;
   }
+
+  // ── ผลต่อ Asset Allocation ──
+  const impMonths=STATE._dcaMonths||12;
+  h+=`<div class="card" style="padding:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="ctitle" style="margin-bottom:0">ผลต่อ Asset Allocation</div>
+      <span id="dca-months-label" class="gold tnum" style="font-size:13px;font-weight:700">${impMonths} เดือน</span>
+    </div>
+    <input id="dca-months-slider" type="range" min="1" max="60" value="${impMonths}" step="1"
+      oninput="setDcaMonths(+this.value)" style="margin-bottom:8px">
+    <div style="display:flex;gap:4px;margin-bottom:14px">
+      ${[3,6,12,24,36,60].map(mo=>`<button class="dca-preset-btn" data-mo="${mo}" onclick="setDcaMonths(${mo})"
+        style="flex:1;background:${impMonths===mo?'linear-gradient(135deg,var(--gold2),var(--gold))':'var(--ink3)'};color:${impMonths===mo?'var(--ink)':'var(--mute)'};border:1px solid var(--line);border-radius:7px;padding:4px 0;font-size:10px;cursor:pointer;font-family:inherit;font-weight:600">${mo<12?mo+'ด.':(mo/12)===1?'1ปี':(mo/12)+'ปี'}</button>`).join('')}
+    </div>
+    <div id="dca-impact"></div>
+  </div>`;
+
   m.innerHTML=h;
+  renderDcaImpact();
 }
 
 function tabGrowth(m){
