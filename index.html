@@ -359,6 +359,25 @@ function setPlan(id,v){
     finally{btnLoading(btn,false);}
   },1200);
 }
+function setPvdTotal(v){
+  const tot=num(v);
+  STATE.assets=STATE.assets.map(a=>
+    a.bucket==='PVD'?{...a,plan:Math.round(tot*(+a.pvd_pct||0)/100)}:a
+  );
+  renderDcaImpact();
+  const totalEl=document.getElementById('dca-monthly-total');
+  if(totalEl) totalEl.textContent=baht(STATE.assets.reduce((s,x)=>s+(+x.plan||0),0));
+}
+function setPvdPct(id,v){
+  const tot=STATE.assets.filter(a=>a.bucket==='PVD').reduce((s,a)=>s+(+a.plan||0),0);
+  STATE.assets=STATE.assets.map(a=>a.id===id?{...a,pvd_pct:num(v)}:a);
+  STATE.assets=STATE.assets.map(a=>
+    a.bucket==='PVD'?{...a,plan:Math.round(tot*(+a.pvd_pct||0)/100)}:a
+  );
+  renderDcaImpact();
+  const totalEl=document.getElementById('dca-monthly-total');
+  if(totalEl) totalEl.textContent=baht(STATE.assets.reduce((s,x)=>s+(+x.plan||0),0));
+}
 function toggleDcaAddForm(){
   STATE._dcaAddForm = STATE._dcaAddForm ? null
     : {name:'', asset_class:'dm_core', bucket:'', plan:0};
