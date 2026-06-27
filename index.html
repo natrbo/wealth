@@ -269,7 +269,7 @@
 <script src="lib/render.js"></script>
 <script>
 // ── State ──
-let STATE = { profile:"fern", assets:[], tax:{}, snapshots:[], tab:"overview", editing:false, accOpen:{}, _addForm:null, _dcaAddForm:null, _dcaMonths:12 };
+let STATE = { profile:"fern", assets:[], tax:{}, snapshots:[], tab:"overview", editing:false, accOpen:{}, _addForm:null, _dcaAddForm:null, _dcaMonths:12, _pvdMonthly:0 };
 
 const $ = (sel,el=document)=>el.querySelector(sel);
 // num, baht, remainingMonths, bracketInfo, calcTax → lib/logic.js
@@ -307,6 +307,7 @@ async function loadProfile(profile){
     const data = await apiLoad(profile);
     if(data.assets && data.assets.length){
       STATE.assets = data.assets.map(a=>({...a,value:+a.value||0,plan:+a.plan||0}));
+      STATE._pvdMonthly = STATE.assets.filter(a=>a.bucket==='PVD').reduce((s,a)=>s+(+a.plan||0),0);
     } else {
       STATE.assets = []; // ว่าง — ให้กดโหลด seed
     }
@@ -359,8 +360,8 @@ function setPlan(id,v){
     finally{btnLoading(btn,false);}
   },1200);
 }
-function setPvdTotal(v){
-  const tot=num(v);
+function _applyPvdTotal(){
+  const tot=STATE._pvdMonthly;
   STATE.assets=STATE.assets.map(a=>
     a.bucket==='PVD'?{...a,plan:Math.round(tot*(+a.pvd_pct||0)/100)}:a
   );
@@ -368,15 +369,13 @@ function setPvdTotal(v){
   const totalEl=document.getElementById('dca-monthly-total');
   if(totalEl) totalEl.textContent=baht(STATE.assets.reduce((s,x)=>s+(+x.plan||0),0));
 }
+function setPvdTotal(v){
+  STATE._pvdMonthly=num(v);
+  _applyPvdTotal();
+}
 function setPvdPct(id,v){
-  const tot=STATE.assets.filter(a=>a.bucket==='PVD').reduce((s,a)=>s+(+a.plan||0),0);
   STATE.assets=STATE.assets.map(a=>a.id===id?{...a,pvd_pct:num(v)}:a);
-  STATE.assets=STATE.assets.map(a=>
-    a.bucket==='PVD'?{...a,plan:Math.round(tot*(+a.pvd_pct||0)/100)}:a
-  );
-  renderDcaImpact();
-  const totalEl=document.getElementById('dca-monthly-total');
-  if(totalEl) totalEl.textContent=baht(STATE.assets.reduce((s,x)=>s+(+x.plan||0),0));
+  _applyPvdTotal();
 }
 function toggleDcaAddForm(){
   STATE._dcaAddForm = STATE._dcaAddForm ? null
