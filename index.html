@@ -369,6 +369,11 @@ function _applyPvdTotal(){
     a.bucket==='PVD'?{...a,plan:Math.round(tot*(+a.pvd_pct||0)/100)}:a
   );
   renderDcaImpact();
+  clearTimeout(_applyPvdTotal._t);
+  _applyPvdTotal._t=setTimeout(async()=>{
+    try{await apiSave("assets",STATE.profile,STATE.assets);toast("บันทึก PVD แล้ว ✓");}
+    catch(e){toast("บันทึกไม่ได้","var(--red)");}
+  },1200);
 }
 function setPvdTotal(v){
   STATE._pvdMonthly=num(v);
