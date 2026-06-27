@@ -347,7 +347,7 @@ function setPlan(id,v){
   a.plan=num(v);
   if(a.plan>0) delete a._isEditingDca;
   const totalEl=document.getElementById('dca-monthly-total');
-  if(totalEl) totalEl.textContent=baht(STATE.assets.reduce((s,x)=>s+(+x.plan||0),0));
+  if(totalEl) totalEl.textContent=baht(STATE.assets.reduce((s,x)=>x.bucket!=='PVD'?(s+(+x.plan||0)):s,0));
   renderDcaImpact();
   clearTimeout(setPlan._t);
   setPlan._t=setTimeout(async()=>{
@@ -366,8 +366,6 @@ function _applyPvdTotal(){
     a.bucket==='PVD'?{...a,plan:Math.round(tot*(+a.pvd_pct||0)/100)}:a
   );
   renderDcaImpact();
-  const totalEl=document.getElementById('dca-monthly-total');
-  if(totalEl) totalEl.textContent=baht(STATE.assets.reduce((s,x)=>s+(+x.plan||0),0));
 }
 function setPvdTotal(v){
   STATE._pvdMonthly=num(v);
