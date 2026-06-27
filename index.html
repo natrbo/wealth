@@ -511,6 +511,151 @@ function go(t){
   if(btn)btn.classList.add("on");
   renderTab();
 }
+function showReportMenu(){
+  const existing=document.getElementById('report-modal');
+  if(existing){existing.remove();return;}
+  const d=document.createElement('div');
+  d.id='report-modal';
+  d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center';
+  d.onclick=e=>{if(e.target===d)d.remove();};
+  d.innerHTML=`<div style="background:var(--ink2);border-radius:16px;padding:24px;width:260px;border:1px solid var(--line)">
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">ส่งออกรายงาน</div>
+    <div class="muted" style="font-size:12px;margin-bottom:18px">DCA + Allocation ของ ${STATE.profile==='fern'?'เฟิร์น':'นัท'}</div>
+    <button class="btn" style="width:100%;margin-bottom:10px" onclick="exportPdf();document.getElementById('report-modal').remove()">PDF / พิมพ์</button>
+    <button class="btn" style="width:100%;background:var(--ink3);color:var(--text);border:1px solid var(--line)" onclick="exportForClaude();document.getElementById('report-modal').remove()">สำหรับ Claude chat</button>
+  </div>`;
+  document.body.appendChild(d);
+}
+function exportForClaude(){
+  const t=total(),bc=byClass();
+  const name=STATE.profile==='fern'?'เฟิร์น':'นัท';
+  const now=new Date();
+  const thM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const dateStr=`${now.getDate()} ${thM[now.getMonth()]} ${now.getFullYear()+543}`;
+  const pvdA=STATE.assets.filter(a=>a.bucket==='PVD');
+  const nonPvd=STATE.assets.filter(a=>a.bucket!=='PVD');
+  const dcaTotal=nonPvd.reduce((s,a)=>s+(+a.plan||0),0);
+  const pvdTotal=STATE._pvdMonthly||pvdA.reduce((s,a)=>s+(+a.plan||0),0);
+  const months=STATE._dcaMonths||12;
+  const tp=STATE.assets.reduce((s,a)=>s+(+a.plan||0),0);
+  const projTotal=t+tp*months;
+  const curBc={},dcaBc={};
+  CK.forEach(k=>{curBc[k]=0;dcaBc[k]=0;});
+  STATE.assets.forEach(a=>{
+    curBc[a.asset_class]=(curBc[a.asset_class]||0)+(+a.value||0);
+    if(+a.plan>0) dcaBc[a.asset_class]=(dcaBc[a.asset_class]||0)+(+a.plan||0);
+  });
+  let txt=`# พอร์ตลงทุน — ${name} | ${dateStr}\n\n`;
+  txt+=`## ภาพรวม\n`;
+  txt+=`มูลค่ารวม: ${baht(t)}\n\n`;
+  txt+=`## Asset Allocation (ปัจจุบัน vs เป้าหมาย)\n`;
+  txt+=`ประเภท | มูลค่า | % จริง | % เป้า | ส่วนต่าง\n`;
+  txt+=`--- | --- | --- | --- | ---\n`;
+  CK.forEach(k=>{
+    const c=cls(k);
+    if(c.target===0&&!(bc[k]>0)) return;
+    const pct=t?((bc[k]||0)/t*100):0;
+    const diff=pct-c.target;
+    txt+=`${c.label} | ${baht(bc[k]||0)} | ${pct.toFixed(1)}% | ${c.target}% | ${diff>=0?'+':''}${diff.toFixed(1)}%\n`;
+  });
+  txt+=`\n## แผน DCA กองทุน (${baht(dcaTotal)}/เดือน)\n`;
+  nonPvd.filter(a=>+a.plan>0).forEach(a=>{
+    txt+=`- ${a.name} [${CLASSES[a.asset_class].label}]: ${baht(a.plan)}\n`;
+  });
+  if(pvdA.length){
+    txt+=`\n## PVD สมทบ (${baht(pvdTotal)}/เดือน)\n`;
+    pvdA.forEach(a=>{
+      txt+=`- ${a.name} [${CLASSES[a.asset_class].label}, ${+a.pvd_pct||0}%]: ${baht(+a.plan||0)}\n`;
+    });
+  }
+  txt+=`\n## Projection +${months} เดือน (DCA รวม PVD ${baht(tp)}/ด.)\n`;
+  txt+=`ประเภท | ตอนนี้ | +${months}ด. | เป้า\n`;
+  txt+=`--- | --- | --- | ---\n`;
+  CK.forEach(k=>{
+    const c=cls(k);
+    if(c.target===0&&!curBc[k]&&!dcaBc[k]) return;
+    const curPct=t?(curBc[k]||0)/t*100:0;
+    const projPct=projTotal?((curBc[k]||0)+(dcaBc[k]||0)*months)/projTotal*100:0;
+    txt+=`${c.label} | ${curPct.toFixed(1)}% | ${projPct.toFixed(1)}% | ${c.target}%\n`;
+  });
+  navigator.clipboard.writeText(txt).then(()=>toast('คัดลอกแล้ว — วางใน Claude chat ได้เลย ✓'));
+}
+function exportPdf(){
+  const t=total(),bc=byClass();
+  const name=STATE.profile==='fern'?'เฟิร์น':'นัท';
+  const now=new Date();
+  const thM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const dateStr=`${now.getDate()} ${thM[now.getMonth()]} ${now.getFullYear()+543}`;
+  const pvdA=STATE.assets.filter(a=>a.bucket==='PVD');
+  const nonPvd=STATE.assets.filter(a=>a.bucket!=='PVD');
+  const dcaTotal=nonPvd.reduce((s,a)=>s+(+a.plan||0),0);
+  const pvdTotal=STATE._pvdMonthly||pvdA.reduce((s,a)=>s+(+a.plan||0),0);
+  const months=STATE._dcaMonths||12;
+  const tp=STATE.assets.reduce((s,a)=>s+(+a.plan||0),0);
+  const projTotal=t+tp*months;
+  const curBc={},dcaBc={};
+  CK.forEach(k=>{curBc[k]=0;dcaBc[k]=0;});
+  STATE.assets.forEach(a=>{
+    curBc[a.asset_class]=(curBc[a.asset_class]||0)+(+a.value||0);
+    if(+a.plan>0) dcaBc[a.asset_class]=(dcaBc[a.asset_class]||0)+(+a.plan||0);
+  });
+  const allocRows=CK.map(k=>{
+    const c=cls(k);
+    if(c.target===0&&!(bc[k]>0)) return '';
+    const pct=t?((bc[k]||0)/t*100):0;
+    const diff=pct-c.target;
+    const color=diff>3?'#c0392b':diff<-3?'#e67e22':'#27ae60';
+    return `<tr><td>${c.label}</td><td>${baht(bc[k]||0)}</td><td>${pct.toFixed(1)}%</td><td>${c.target}%</td><td style="color:${color}">${diff>=0?'+':''}${diff.toFixed(1)}%</td></tr>`;
+  }).join('');
+  const dcaRows=nonPvd.filter(a=>+a.plan>0).map(a=>
+    `<tr><td>${a.name}</td><td>${CLASSES[a.asset_class].label}</td><td>${baht(a.plan)}</td></tr>`).join('');
+  const pvdRows=pvdA.map(a=>
+    `<tr><td>${a.name}</td><td>${CLASSES[a.asset_class].label}</td><td>${+a.pvd_pct||0}%</td><td>${baht(+a.plan||0)}</td></tr>`).join('');
+  const projRows=CK.map(k=>{
+    const c=cls(k);
+    if(c.target===0&&!curBc[k]&&!dcaBc[k]) return '';
+    const curPct=t?(curBc[k]||0)/t*100:0;
+    const projPct=projTotal?((curBc[k]||0)+(dcaBc[k]||0)*months)/projTotal*100:0;
+    const diff=projPct-c.target;
+    const color=diff>3?'#c0392b':diff<-3?'#e67e22':'#27ae60';
+    return `<tr><td>${c.label}</td><td>${curPct.toFixed(1)}%</td><td>${projPct.toFixed(1)}%</td><td>${c.target}%</td><td style="color:${color}">${diff>=0?'+':''}${diff.toFixed(1)}%</td></tr>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+<title>Portfolio Report — ${name}</title>
+<style>
+  body{font-family:'Sarabun',sans-serif;font-size:13px;color:#1a1a2e;margin:32px;line-height:1.5}
+  h1{font-size:20px;margin-bottom:4px}h2{font-size:14px;margin:20px 0 8px;border-bottom:2px solid #e0c97f;padding-bottom:4px;color:#5a4000}
+  table{width:100%;border-collapse:collapse;margin-bottom:8px}
+  th{background:#f5f0e0;text-align:left;padding:6px 8px;font-size:11px;border:1px solid #ddd}
+  td{padding:5px 8px;border:1px solid #eee;vertical-align:top}
+  tr:nth-child(even){background:#fafaf5}
+  .meta{color:#666;font-size:12px;margin-bottom:16px}
+  .total{font-size:24px;font-weight:700;color:#5a4000}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media print{body{margin:16px}}
+</style></head><body>
+<h1>Portfolio Report — ${name}</h1>
+<div class="meta">${dateStr} · มูลค่ารวม: <span class="total">${baht(t)}</span></div>
+<div class="grid">
+<div>
+<h2>Asset Allocation (ปัจจุบัน vs เป้า)</h2>
+<table><tr><th>ประเภท</th><th>มูลค่า</th><th>จริง</th><th>เป้า</th><th>ต่าง</th></tr>${allocRows}</table>
+</div>
+<div>
+<h2>Projection +${months} เดือน</h2>
+<table><tr><th>ประเภท</th><th>ตอนนี้</th><th>+${months}ด.</th><th>เป้า</th><th>ต่าง</th></tr>${projRows}</table>
+</div>
+</div>
+<h2>แผน DCA กองทุน (${baht(dcaTotal)}/เดือน)</h2>
+<table><tr><th>กองทุน</th><th>ประเภท</th><th>บาท/เดือน</th></tr>${dcaRows}</table>
+${pvdA.length?`<h2>PVD สมทบ (${baht(pvdTotal)}/เดือน)</h2>
+<table><tr><th>กอง</th><th>ประเภท</th><th>%</th><th>บาท/เดือน</th></tr>${pvdRows}</table>`:''}
+</body></html>`;
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  w.onload=()=>w.print();
+}
 function toggleTheme(){
   document.body.classList.toggle('light');
   localStorage.setItem('theme', document.body.classList.contains('light')?'light':'dark');
