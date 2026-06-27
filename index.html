@@ -311,6 +311,14 @@ async function loadProfile(profile){
     if(data.assets && data.assets.length){
       STATE.assets = data.assets.map(a=>({...a,value:+a.value||0,plan:+a.plan||0}));
       STATE._pvdMonthly = STATE.assets.filter(a=>a.bucket==='PVD').reduce((s,a)=>s+(+a.plan||0),0);
+      // pvd_pct ไม่ถูก save โดย Apps Script — derive กลับจาก plan amounts
+      if(STATE._pvdMonthly>0){
+        STATE.assets=STATE.assets.map(a=>
+          a.bucket==='PVD'&&!(+a.pvd_pct)
+            ?{...a,pvd_pct:Math.round((+a.plan||0)/STATE._pvdMonthly*100)}
+            :a
+        );
+      }
     } else {
       STATE.assets = []; // ว่าง — ให้กดโหลด seed
     }
