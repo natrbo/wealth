@@ -292,8 +292,8 @@ async function apiLoad(profile){
 async function apiSave(sheet,profile,rows){
   const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
     body:JSON.stringify({sheet,profile,rows})});
-  const j=await r.json().catch(()=>({}));
-  if(j.ok===false) throw new Error(j.error||"save failed");
+  const j=await r.json().catch(()=>({ok:false,error:"server error"}));
+  if(!j.ok) throw new Error(j.error||"save failed");
 }
 
 function toast(msg,color="var(--green)"){
