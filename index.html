@@ -373,25 +373,43 @@ function setPlan(id,v){
     finally{btnLoading(btn,false);}
   },1200);
 }
-function _applyPvdTotal(){
-  const tot=STATE._pvdMonthly;
-  STATE.assets=STATE.assets.map(a=>
-    a.bucket==='PVD'?{...a,plan:Math.round(tot*(+a.pvd_pct||0)/100)}:a
-  );
+// คำนวณยอด PVD ใหม่จาก % + อัปเดต DOM สด ๆ (ไม่ autosave — กดบันทึกเอง)
+function recalcPvd(){
+  const tot=+STATE._pvdMonthly||0;
+  let pctSum=0;
+  STATE.assets.forEach(a=>{
+    if(a.bucket!=='PVD')return;
+    a.plan=Math.round(tot*(+a.pvd_pct||0)/100);
+    pctSum+=(+a.pvd_pct||0);
+    const cell=document.getElementById('pvd-amt-'+a.id);
+    if(cell)cell.textContent=baht(a.plan);
+  });
+  const ok=Math.abs(pctSum-100)<0.05, pctShow=+pctSum.toFixed(1), pctGap=+Math.abs(100-pctSum).toFixed(1);
+  const sumEl=document.getElementById('pvd-sum');
+  if(sumEl){
+    sumEl.textContent=ok?`รวม ${pctShow}% ✓`
+      :`รวม ${pctShow}% — ${pctSum<100?'ขาดอีก '+pctGap:'เกินมา '+pctGap}% (ต้องรวมเป็น 100)`;
+    sumEl.style.color=ok?'var(--green)':'var(--red)';
+  }
+  const btn=document.getElementById('pvd-save-btn');
+  if(btn){btn.disabled=!ok;btn.style.opacity=ok?'1':'.45';btn.style.cursor=ok?'pointer':'not-allowed';}
   renderDcaImpact();
-  clearTimeout(_applyPvdTotal._t);
-  _applyPvdTotal._t=setTimeout(async()=>{
-    try{await apiSave("assets",STATE.profile,STATE.assets);toast("บันทึก PVD แล้ว ✓");}
-    catch(e){toast("บันทึกไม่ได้","var(--red)");}
-  },1200);
 }
-function setPvdTotal(v){
-  STATE._pvdMonthly=num(v);
-  _applyPvdTotal();
-}
+function setPvdTotal(v){ STATE._pvdMonthly=num(v); recalcPvd(); }
 function setPvdPct(id,v){
-  STATE.assets=STATE.assets.map(a=>a.id===id?{...a,pvd_pct:num(v)}:a);
-  _applyPvdTotal();
+  const a=STATE.assets.find(x=>x.id===id); if(a)a.pvd_pct=num(v);
+  recalcPvd();
+}
+// บันทึก PVD เอง — สัดส่วน % ต้องรวมเป็น 100 พอดี
+async function savePvd(){
+  const pctSum=STATE.assets.filter(a=>a.bucket==='PVD').reduce((s,a)=>s+(+a.pvd_pct||0),0);
+  if(Math.abs(pctSum-100)>=0.05){toast(`สัดส่วน % ต้องรวมเป็น 100 พอดี (ตอนนี้ ${+pctSum.toFixed(1)}%)`,"var(--red)");return;}
+  const snap=snapState();
+  const btn=document.getElementById('pvd-save-btn');
+  btnLoading(btn,true);
+  try{await apiSave("assets",STATE.profile,STATE.assets);toast("บันทึก PVD แล้ว ✓");}
+  catch(e){rollback(snap);toast("บันทึกไม่ได้ — ย้อนกลับแล้ว","var(--red)");}
+  finally{btnLoading(btn,false);recalcPvd();}
 }
 function toggleDcaAddForm(){
   STATE._dcaAddForm = STATE._dcaAddForm ? null
