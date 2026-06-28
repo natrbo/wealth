@@ -322,7 +322,9 @@ async function loadProfile(profile){
     } else {
       STATE.assets = []; // ว่าง — ให้กดโหลด seed
     }
-    STATE.tax = (data.tax && data.tax[0]) ? coerceTax(data.tax[0]) : {};
+    // backend อาจคืน tax เป็น array [{...}] (เก่า) หรือ object {...} (JSON-store ใหม่) — รองรับทั้งคู่
+    const taxRow = Array.isArray(data.tax) ? data.tax[0] : data.tax;
+    STATE.tax = (taxRow && Object.keys(taxRow).length) ? coerceTax(taxRow) : STATE.tax;
     STATE.snapshots = (data.snapshots||[]).map(s=>({...s,total:+s.total||0,
       breakdown: typeof s.breakdown==="string"?safeParse(s.breakdown):(s.breakdown||{})}));
   }catch(e){
