@@ -218,6 +218,33 @@
   })();
   eqFields("refund = wht − tax เป็นจำนวนเต็มเป๊ะ", L.calcTax({income:500000, wht:11500}), {taxPayable:11500, refund:0});
 
+  // ═══════════════════════════ net worth (Phase 1) ═══════════════════════════
+  group("net worth aggregation");
+  (function(){
+    eq("ownerSplit household = 50/50", L.ownerSplit("household"), {splitFern:0.5,splitNut:0.5});
+    eq("ownerSplit fern = 100/0",     L.ownerSplit("fern"),      {splitFern:1,splitNut:0});
+    eq("ownerSplit nut = 0/100",      L.ownerSplit("nut"),       {splitFern:0,splitNut:1});
+
+    const ctx={
+      portfolios:{ fern:[{value:1000000}], nut:[{value:200000}] },
+      assetsOther:[{currentValue:100000, splitFern:0.5, splitNut:0.5}],   // ถือร่วม
+      liabilities:[{principalRemaining:600000, splitFern:0.5, splitNut:0.5, active:true}],
+    };
+    const a=L.netWorthAll(ctx);
+    eq("fern assets = พอร์ต + ครึ่งเงินสด", a.fern.assets, 1050000);
+    eq("fern liabilities = ครึ่งหนี้",       a.fern.liabilities, 300000);
+    eq("fern netWorth",                       a.fern.netWorth, 750000);
+    eq("nut netWorth",                        a.nut.netWorth, 200000+50000-300000);
+    eq("household netWorth = fern + nut",     a.household.netWorth, a.fern.netWorth+a.nut.netWorth);
+    ok("household assets = Σ ของสองคน (ไม่นับซ้ำ)", a.household.assets===a.fern.assets+a.nut.assets);
+  })();
+  (function(){
+    // หนี้ที่ active=false ต้องไม่ถูกนับ
+    const ctx={ portfolios:{fern:[],nut:[]}, assetsOther:[],
+      liabilities:[{principalRemaining:500000, splitFern:0.5, splitNut:0.5, active:false}] };
+    eq("หนี้ inactive ไม่ถูกนับ", L.netWorthAll(ctx).household.liabilities, 0);
+  })();
+
   // ═══════════════════════════ summary ═══════════════════════════
   const total = pass + fail;
   const sEl = document.getElementById("summary");
