@@ -699,7 +699,7 @@
 <!-- render functions — tabOverview, tabDCA, tabTax, etc. -->
 <script src="lib/render.js"></script>
 <!-- net worth module — global sheets + dashboard (Phase 1) -->
-<script src="lib/networth.js?v=3a"></script>
+<script src="lib/networth.js?v=3a_biz"></script>
 <script>
 // ── State ──
 let STATE = { profile:"fern", assets:[], tax:{}, snapshots:[], tab:"overview", editing:false, accOpen:{}, _addForm:null, _dcaAddForm:null, _dcaMonths:12, _pvdMonthly:0 };
@@ -1015,7 +1015,7 @@ function go(t){
   }
   STATE.tab=t;
   document.querySelectorAll("nav .tab, .sidebar-nav .tab-btn").forEach(b=>b.classList.remove("on"));
-  const tabs=["overview","update","dca","tax","networth"];
+  const tabs=["overview","update","dca","tax","networth","business"];
   const mBtn=document.querySelectorAll("nav .tab")[tabs.indexOf(t)];
   if(mBtn)mBtn.classList.add("on");
   const dBtn=document.querySelectorAll(".sidebar-nav .tab-btn")[tabs.indexOf(t)];
