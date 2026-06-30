@@ -245,6 +245,97 @@
     eq("หนี้ inactive ไม่ถูกนับ", L.netWorthAll(ctx).household.liabilities, 0);
   })();
 
+  // ═══════════════════════════ Business corporate 2-tier model (Phase 3a/b) ═══════════════════════════
+  group("business corporate equity model");
+  (function(){
+    const ctx = {
+      businessAssets: [
+        { id: "biz1", name: "บริษัทปล่อยกู้ A", ownershipPct: 50, additionalCapital: 50000, owner: "household", splitFern: 0.5, splitNut: 0.5 }
+      ],
+      loanBook: [
+        { borrowerName: "แสงชัย", principalOutstanding: 150000, businessId: "biz1" },
+        { borrowerName: "ชูชาติ", principalOutstanding: 50000, businessId: "biz1" }
+      ]
+    };
+    // corporate equity = principalOutstanding sum (200k) + additionalCapital (50k) = 250k
+    // fern share = 250k * 50% ownership * 50% split = 62.5k
+    const a = L.netWorthAll(ctx);
+    eq("fern business assets = 62.5k", a.fern.businessAssets, 62500);
+    eq("nut business assets = 62.5k", a.nut.businessAssets, 62500);
+    eq("household business assets = 125k", a.household.businessAssets, 125000);
+  })();
+
+  // ═══════════════════════════ Key financial metrics (Phase 3b) ═══════════════════════════
+  group("key financial metrics (Phase 3b)");
+  (function(){
+    const ctx = {
+      portfolios: {
+        fern: [{ plan: 5000, value: 50000 }],
+        nut: [{ plan: 2000, value: 20000 }]
+      },
+      cashFlow: [
+        { profile: "fern", monthlyExpense: 15000 },
+        { profile: "nut", monthlyExpense: 10000 }
+      ],
+      liabilities: [
+        { principalRemaining: 500000, monthlyPayment: 6000, splitFern: 0.5, splitNut: 0.5, active: true },
+        { principalRemaining: 100000, monthlyPayment: 2000, splitFern: 1, splitNut: 0, active: true },
+        { principalRemaining: 300000, monthlyPayment: 3000, splitFern: 0, splitNut: 1, active: false } // Inactive
+      ],
+      insurance: [
+        { insured: "fern", type: "life", sumAssured: 1000000, annualPremium: 24000, premiumFrequency: "annual" },
+        { insured: "fern", type: "health", sumAssured: 0, annualPremium: 1000, premiumFrequency: "monthly" }, // Health
+        { insured: "nut", type: "life", sumAssured: 500000, annualPremium: 12000, premiumFrequency: "annual" }
+      ],
+      assetsOther: [
+        { currentValue: 100000, liquid: true, splitFern: 0.5, splitNut: 0.5 },
+        { currentValue: 50000, liquid: false, splitFern: 1, splitNut: 0 } // Not liquid
+      ],
+      incomeStreams: [
+        { source: "Job", type: "salary", monthlyAmount: 30000, passive: false, owner: "fern", splitFern: 1, splitNut: 0 }
+      ],
+      config: { expectedReturn: 7, protectionYears: 10 }
+    };
+
+    const fern = L.financialMetrics("fern", ctx);
+    eq("fern income = 30k", fern.income, 30000);
+    eq("fern expense = 15k", fern.expense, 15000);
+    eq("fern debt payment = 5k", fern.debtPayment, 5000);
+    eq("fern insurance premium = 3k", fern.insurancePrem, 3000);
+    eq("fern DCA capacity = 7k", fern.safeDCACapacity, 7000);
+    eq("fern current DCA = 5k", fern.currentDCA, 5000);
+    eq("fern dcaOverflow = false", fern.dcaOverflow, false);
+    eq("fern liquidAssets = 50k", fern.liquidAssets, 50000);
+    eq("fern emergencyMonths = 50k / 23k", fern.emergencyMonths, 50000 / 23000);
+    eq("fern passiveRatio = 0%", fern.passiveRatio, 0);
+    eq("fern needCoverage = 350k liab + 15k*120 exp", fern.needCoverage, 350000 + 15000 * 12 * 10);
+    eq("fern haveCoverage = 1M life sum", fern.haveCoverage, 1000000);
+    eq("fern protectionGap = 1.15M", fern.protectionGap, (350000 + 15000 * 12 * 10) - 1000000);
+
+    // zero values check
+    const zeroCtx = {
+      portfolios: {},
+      cashFlow: [],
+      liabilities: [],
+      insurance: [],
+      assetsOther: [],
+      businessAssets: [],
+      loanBook: [],
+      incomeStreams: []
+    };
+    const zero = L.financialMetrics("fern", zeroCtx);
+    eq("zero safeDCACapacity", zero.safeDCACapacity, 0);
+    eq("zero emergencyMonths = Infinity", zero.emergencyMonths, Infinity);
+    eq("zero passiveRatio", zero.passiveRatio, 0);
+    eq("zero protectionGap", zero.protectionGap, 0);
+
+    // metricsAll household check
+    const all = L.metricsAll(ctx);
+    eq("household safeDCACapacity = hhIncome - hhExpense - hhDebt - hhIns", all.household.safeDCACapacity, 30000 - 25000 - 8000 - 4000);
+    eq("household emergencyMonths = 100k / 37k", all.household.emergencyMonths, 100000 / 37000);
+    eq("household protectionGap = needCoverage - haveCoverage", all.household.protectionGap, 3600000 - 1500000);
+  })();
+
   // ═══════════════════════════ summary ═══════════════════════════
   const total = pass + fail;
   const sEl = document.getElementById("summary");
